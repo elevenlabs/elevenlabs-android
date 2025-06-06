@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ElevenLabs SDK Demo</string>
+    <string name="start_conversation">Start Conversation</string>
+    <string name="stop_conversation">Stop Conversation</string>
+    <string name="send_message">Send</string>
+    <string name="agent_id_hint">Agent ID</string>
+    <string name="message_hint">Type a message...</string>
+    <string name="conversation_label">Conversation:</string>
+    <string name="status_disconnected">Status: DISCONNECTED</string>
+    <string name="mode_none">Mode: -</string>
+    <string name="volume_zero">Volume: 0%</string>
+    <string name="permission_required">All permissions are required for the SDK to work properly</string>
+    <string name="enter_agent_id">Please enter an Agent ID</string>
+    <string name="grant_permissions">Please grant all required permissions</string>
+</resources> 
