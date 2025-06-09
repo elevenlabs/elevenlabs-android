@@ -2,9 +2,11 @@ package com.elevenlabs.sdk
 
 import org.junit.Test
 import org.junit.Assert.*
+import io.mockk.*
 
 /**
  * Unit tests for ElevenLabsSDK
+ * Shows how the interface makes mocking easy
  */
 class ElevenLabsSDKTest {
 
@@ -40,7 +42,6 @@ class ElevenLabsSDKTest {
 
     @Test
     fun testSessionConfigRequiresAgentIdOrSignedUrl() {
-        // Should throw exception when neither agentId nor signedUrl is provided
         try {
             ElevenLabsSDK.SessionConfig()
             fail("Expected IllegalArgumentException")
@@ -71,7 +72,6 @@ class ElevenLabsSDKTest {
         }
         
         tools.register("test_tool", testHandler)
-        // Test that registration doesn't throw
         assertTrue(true)
     }
 
@@ -96,5 +96,19 @@ class ElevenLabsSDKTest {
         assertTrue(ElevenLabsSDK.Status.values().contains(ElevenLabsSDK.Status.CONNECTED))
         assertTrue(ElevenLabsSDK.Status.values().contains(ElevenLabsSDK.Status.DISCONNECTING))
         assertTrue(ElevenLabsSDK.Status.values().contains(ElevenLabsSDK.Status.DISCONNECTED))
+    }
+
+    // Example of how easy it is to mock now
+    @Test
+    fun testMockingExample() {
+        val mockSDK = mockk<ElevenLabsInterface>()
+        val mockConversation = mockk<ElevenLabsInterface.Conversation>()
+        
+        // Mock behavior
+        coEvery { mockSDK.startSession(any(), any()) } returns mockConversation
+        every { mockConversation.getId() } returns "mock-id"
+        
+        // Test
+        assertEquals("mock-id", mockConversation.getId())
     }
 } 
