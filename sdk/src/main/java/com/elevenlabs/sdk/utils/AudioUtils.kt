@@ -42,11 +42,22 @@ object AudioUtils {
     }
     
     /**
-     * Normalize audio level to 0-1 range
+     * Normalize audio level to 0-1 range with improved sensitivity
      */
     fun normalizeAudioLevel(rms: Float): Float {
-        val meterLevel = if (rms > 0) 20 * kotlin.math.log10(rms) else -50.0f
-        return kotlin.math.max(0f, kotlin.math.min(1f, (meterLevel + 50) / 50))
+        // Convert RMS to decibels
+        val dB = if (rms > 0) {
+            20 * kotlin.math.log10(rms)
+        } else {
+            -80f // Minimum dB value
+        }
+        
+        // Map typical microphone input range (-60dB to -10dB) to 0-1
+        val minDb = -60f
+        val maxDb = -10f
+        
+        val normalized = (dB - minDb) / (maxDb - minDb)
+        return kotlin.math.max(0f, kotlin.math.min(1f, normalized))
     }
     
     /**
