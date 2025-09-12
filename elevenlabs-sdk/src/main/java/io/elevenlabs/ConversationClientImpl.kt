@@ -49,7 +49,7 @@ internal object ConversationClientImpl {
             config
         }
 
-        // Create LiveKit room with higher sample rate for better audio quality
+        // Create LiveKit room
         val room = LiveKit.create(
             appContext = context,
             overrides = LiveKitOverrides(
