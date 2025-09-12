@@ -19,8 +19,7 @@ import kotlinx.coroutines.flow.StateFlow
  */
 class LiveKitAudioManager(
     private val context: Context,
-    private val room: Room,
-    private val audioSettings: AudioSettings = AudioUtils.getOptimalAudioSettings()
+    private val room: Room
 ) : AudioManager {
 
     private var localAudioTrack: LocalAudioTrack? = null

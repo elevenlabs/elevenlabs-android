@@ -88,14 +88,6 @@ object AudioUtils {
     }
 
     /**
-     * Get optimal audio settings for conversation quality
-     * @return AudioSettings optimized for voice conversations
-     */
-    fun getOptimalAudioSettings(): AudioSettings {
-        return AudioSettings.VOICE_CALL_OPTIMIZED
-    }
-
-    /**
      * Set microphone mute state
      * @param context Android context
      * @param muted true to mute microphone, false to unmute

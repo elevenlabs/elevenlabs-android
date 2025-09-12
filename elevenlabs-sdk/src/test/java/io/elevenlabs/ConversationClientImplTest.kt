@@ -110,7 +110,17 @@ class ConversationClientImplTest {
     @Test
     fun `startSession works with valid private agent config`() = runTest {
         // Mock all the dependencies we need
+        val mockRoom = mockk<Room>(relaxed = true)
+
         mockkObject(io.livekit.android.LiveKit)
+        every {
+            io.livekit.android.LiveKit.create(
+                appContext = any(),
+                overrides = any()
+            )
+        } returns mockRoom
+        every { io.livekit.android.LiveKit.create(any()) } returns mockRoom
+        every { io.livekit.android.LiveKit.create(any(), any()) } returns mockRoom
 
         // Mock the constructor and its methods
         mockkConstructor(ConversationSessionImpl::class)
@@ -122,8 +132,6 @@ class ConversationClientImplTest {
         mockkConstructor(io.elevenlabs.audio.LiveKitAudioManager::class)
         mockkConstructor(ClientToolRegistry::class)
 
-        val mockRoom = mockk<Room>(relaxed = true)
-        every { io.livekit.android.LiveKit.create(any()) } returns mockRoom
         every { anyConstructed<io.elevenlabs.audio.AudioSessionManager>().configureForVoiceCall() } just Runs
 
         val config = ConversationConfig(
@@ -134,7 +142,12 @@ class ConversationClientImplTest {
         val result = ConversationClientImpl.startSession(config, mockContext)
 
         assertNotNull(result)
-        verify { io.livekit.android.LiveKit.create(mockContext) }
+        verify {
+            io.livekit.android.LiveKit.create(
+                appContext = mockContext,
+                overrides = any()
+            )
+        }
     }
 
     // @Test

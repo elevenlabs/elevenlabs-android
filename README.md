@@ -79,6 +79,7 @@ import io.elevenlabs.ClientToolResult
 val config = ConversationConfig(
     agentId = "<your_public_agent_id>", // OR conversationToken = "<token>"
     userId = "your-user-id",
+    audioInputSampleRate = "48000", // Optional parameter, defaults to 48kHz. Lower values can help with audio input issues on slower connections
     // Optional callbacks
     onConnect = { conversationId ->
         // Connected, you can store conversationId via session.getId() too
