@@ -21,14 +21,14 @@ import io.elevenlabs.models.ConversationEvent.ClientToolCall
  * @param conversationToken Pre-generated token for private agents (mutually exclusive with agentId)
  * @param userId Optional user identifier for conversation tracking
  * @param textOnly Whether to use text-only mode (true) or voice mode (false, default)
- * @param audioSampleRate Sample rate for audio recording in Hz (default: 48000 for high quality)
+ * @param audioInputSampleRate Sample rate for audio recording in Hz (default: 48000 for high quality)
  */
 data class ConversationConfig(
     val agentId: String? = null,
     val conversationToken: String? = null,
     val userId: String? = null,
     val textOnly: Boolean = false,
-    val audioSampleRate: Int = 48000,
+    val audioInputSampleRate: Int = 48000,
     val overrides: Overrides? = null,
     val customLlmExtraBody: Map<String, Any>? = null,
     val dynamicVariables: Map<String, Any>? = null,
@@ -58,10 +58,10 @@ data class ConversationConfig(
         }
 
         // Validation: audioSampleRate should be a valid audio sample rate
-        require(audioSampleRate > 0) {
+        require(audioInputSampleRate > 0) {
             "audioSampleRate must be positive"
         }
-        require(audioSampleRate in listOf(8000, 16000, 22050, 44100, 48000)) {
+        require(audioInputSampleRate in listOf(8000, 16000, 22050, 44100, 48000)) {
             "audioSampleRate must be a standard sample rate (8000, 16000, 22050, 44100, 48000 Hz)"
         }
     }

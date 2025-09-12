@@ -55,7 +55,7 @@ internal object ConversationClientImpl {
             overrides = LiveKitOverrides(
                 audioOptions = AudioOptions(
                     javaAudioDeviceModuleCustomizer = { builder ->
-                        builder.setSampleRate(finalConfig.audioSampleRate)
+                        builder.setSampleRate(finalConfig.audioInputSampleRate)
                     }
                 )
             )
