@@ -10,6 +10,8 @@ import io.elevenlabs.network.WebRTCConnection
 import io.elevenlabs.ConversationSession
 import io.elevenlabs.ConversationConfig
 import io.livekit.android.LiveKit
+import io.livekit.android.LiveKitOverrides
+import io.livekit.android.AudioOptions
 
 /**
  * Internal implementation of ConversationClient
@@ -47,8 +49,17 @@ internal object ConversationClientImpl {
             config
         }
 
-        // Create LiveKit room
-        val room = LiveKit.create(context)
+        // Create LiveKit room with higher sample rate for better audio quality
+        val room = LiveKit.create(
+            appContext = context,
+            overrides = LiveKitOverrides(
+                audioOptions = AudioOptions(
+                    javaAudioDeviceModuleCustomizer = { builder ->
+                        builder.setSampleRate(finalConfig.audioSampleRate)
+                    }
+                )
+            )
+        )
         Log.d("ConversationClient", "Created LiveKit room instance @${room.hashCode()}")
 
         // Create connection with shared room (ensures consistent permission state)
@@ -125,7 +136,6 @@ class ConversationSessionBuilder(private val context: Context) {
 
     private var config: ConversationConfig? = null
     private val customTools = mutableMapOf<String, ClientTool>()
-    private var audioSettings: io.elevenlabs.audio.AudioSettings? = null
 
     /**
      * Set the conversation configuration
@@ -160,13 +170,6 @@ class ConversationSessionBuilder(private val context: Context) {
         return this
     }
 
-    /**
-     * Set custom audio settings
-     */
-    fun audioSettings(settings: io.elevenlabs.audio.AudioSettings): ConversationSessionBuilder {
-        this.audioSettings = settings
-        return this
-    }
 
     /**
      * Build the conversation session

@@ -284,45 +284,4 @@ class AudioSessionManager(private val context: Context) {
      * Check if microphone is muted
      */
     fun isMicrophoneMuted(): Boolean = audioManager.isMicrophoneMute
-
-    /**
-     * Get optimal audio settings for the current device
-     */
-    fun getOptimalSettings(): AudioSettings {
-        return when {
-            isLowEndDevice() -> AudioSettings(
-                sampleRate = 16000,
-                channels = 1,
-                bitRate = 32000,
-                echoCancellation = true,
-                noiseSuppression = true,
-                automaticGainControl = true
-            )
-            isHighEndDevice() -> AudioSettings(
-                sampleRate = 44100,
-                channels = 1,
-                bitRate = 64000,
-                echoCancellation = true,
-                noiseSuppression = true,
-                automaticGainControl = false
-            )
-            else -> AudioSettings.VOICE_CALL_OPTIMIZED
-        }
-    }
-
-    /**
-     * Check if this is a low-end device
-     */
-    private fun isLowEndDevice(): Boolean {
-        // Simple heuristic - can be improved with more sophisticated detection
-        return Build.VERSION.SDK_INT < Build.VERSION_CODES.M
-    }
-
-    /**
-     * Check if this is a high-end device
-     */
-    private fun isHighEndDevice(): Boolean {
-        // Simple heuristic - can be improved with more sophisticated detection
-        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
-    }
 }
