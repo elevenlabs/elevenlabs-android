@@ -57,12 +57,9 @@ data class ConversationConfig(
             }
         }
 
-        // Validation: audioSampleRate should be a valid audio sample rate
-        require(audioInputSampleRate > 0) {
-            "audioSampleRate must be positive"
-        }
+        // Validation: audioInputSampleRate should be a valid audio sample rate
         require(audioInputSampleRate in listOf(8000, 16000, 22050, 44100, 48000)) {
-            "audioSampleRate must be a standard sample rate (8000, 16000, 22050, 44100, 48000 Hz)"
+            "audioInputSampleRate must be a standard sample rate (8000, 16000, 22050, 44100, 48000 Hz)"
         }
     }
 
