@@ -211,8 +211,12 @@ object ConversationEventParser {
      * Handle parsing errors
      */
     private fun handleParsingError(json: String, error: Exception) {
-        Log.d("ConversationEventParser", "Failed to parse conversation event: ${error.message}")
-        Log.d("ConversationEventParser", "JSON: $json")
+        try {
+            Log.d("ConversationEventParser", "Failed to parse conversation event: ${error.message}")
+            Log.d("ConversationEventParser", "JSON: $json")
+        } catch (_: Exception) {
+            // Log not available (e.g., in unit tests)
+        }
     }
 }
 
