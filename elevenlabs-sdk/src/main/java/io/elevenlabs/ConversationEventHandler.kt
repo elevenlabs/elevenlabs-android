@@ -44,7 +44,6 @@ class ConversationEventHandler(
         try {
             when (event) {
                 is ConversationEvent.AgentResponse -> handleAgentResponse(event)
-                is ConversationEvent.AgentChatResponsePart -> handleAgentChatResponsePart(event)
                 is ConversationEvent.UserTranscript -> handleUserTranscript(event)
                 is ConversationEvent.ClientToolCall -> handleClientToolCall(event)
                 is ConversationEvent.VadScore -> handleVadScore(event)
@@ -82,27 +81,6 @@ class ConversationEventHandler(
         }
 
         Log.d("ConvEventHandler", "Agent response: ${event.agentResponse}")
-    }
-
-    /**
-     * Handle agent chat response part events (streaming text chunks)
-     */
-    private suspend fun handleAgentChatResponsePart(event: ConversationEvent.AgentChatResponsePart) {
-        when (event.type) {
-            AgentChatResponsePartType.START -> {
-                Log.d("ConvEventHandler", "Agent text stream started")
-                // Update conversation mode to speaking when streaming starts
-                _conversationMode.value = ConversationMode.SPEAKING
-            }
-            AgentChatResponsePartType.DELTA -> {
-                Log.d("ConvEventHandler", "Agent text chunk: ${event.text}")
-            }
-            AgentChatResponsePartType.STOP -> {
-                Log.d("ConvEventHandler", "Agent text stream ended")
-                // Enable feedback on agent reply completion
-                onCanSendFeedbackChange?.invoke(true)
-            }
-        }
     }
 
     /**

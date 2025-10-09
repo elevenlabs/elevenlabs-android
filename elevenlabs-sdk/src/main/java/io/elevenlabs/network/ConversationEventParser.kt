@@ -1,7 +1,6 @@
 package io.elevenlabs.network
 
 import android.util.Log
-import io.elevenlabs.models.AgentChatResponsePartType
 import io.elevenlabs.models.ConversationEvent
 import io.elevenlabs.models.ConversationMode
 import io.elevenlabs.models.ConversationStatus
@@ -37,7 +36,6 @@ object ConversationEventParser {
                 "audio" -> parseAudio(jsonObject)
                 "agent_response" -> parseAgentResponse(jsonObject)
                 "agent_response_correction" -> parseAgentResponseCorrection(jsonObject)
-                "agent_chat_response_part" -> parseAgentChatResponsePart(jsonObject)
                 "user_transcript" -> parseUserTranscript(jsonObject)
                 "client_tool_call" -> parseClientToolCall(jsonObject)
                 "agent_tool_response" -> parseAgentToolResponse(jsonObject)
@@ -90,18 +88,6 @@ object ConversationEventParser {
         val obj = jsonObject.getAsJsonObject("agent_response_event")
         val content = obj?.get("agent_response")?.asString ?: ""
         return ConversationEvent.AgentResponse(agentResponse = content)
-    }
-
-    /**
-     * Parse agent chat response part event (streaming text chunks)
-     * Matches payload: {"text_response_part":{"text":"Hello","type":"delta"},"type":"agent_chat_response_part"}
-     */
-    private fun parseAgentChatResponsePart(jsonObject: JsonObject): ConversationEvent.AgentChatResponsePart {
-        val obj = jsonObject.getAsJsonObject("text_response_part")
-        val text = obj?.get("text")?.asString ?: ""
-        val typeString = obj?.get("type")?.asString
-        val type = AgentChatResponsePartType.fromString(typeString) ?: AgentChatResponsePartType.DELTA
-        return ConversationEvent.AgentChatResponsePart(text = text, type = type)
     }
 
     /**
