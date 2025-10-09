@@ -119,4 +119,17 @@ sealed class ConversationEvent {
         val eventId: Int
     ) : ConversationEvent()
 
+    /**
+     * Event representing a chunk of streaming text response from the agent
+     * Used in text-only conversations to stream LLM responses.
+     * Matches payload: {"text_response_part":{"text":"...", "type":"delta"},"type":"agent_chat_response_part"}
+     *
+     * @param text The text chunk (empty for START/STOP, contains content for DELTA)
+     * @param type The type of response part (START, DELTA, or STOP)
+     */
+    data class AgentChatResponsePart(
+        val text: String,
+        val type: AgentChatResponsePartType
+    ) : ConversationEvent()
+
 }
