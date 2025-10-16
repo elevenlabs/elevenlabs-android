@@ -38,7 +38,7 @@ internal object ConversationClientImpl {
 
         // Generate token if needed for public agents
         val finalConfig = if (!config.isPrivateAgent) {
-            val tokenService = TokenService()
+            val tokenService = TokenService(baseUrl = config.apiEndpoint)
             val tokenResponse = tokenService.fetchPublicAgentToken(
                 config.agentId!!,
                 config.overrides?.client?.source ?: "android_sdk",

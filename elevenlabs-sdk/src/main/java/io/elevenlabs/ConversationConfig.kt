@@ -22,6 +22,8 @@ import io.elevenlabs.models.ConversationEvent.ClientToolCall
  * @param userId Optional user identifier for conversation tracking
  * @param textOnly Whether to use text-only mode (true) or voice mode (false, default)
  * @param audioInputSampleRate Sample rate for audio recording in Hz (default: 48000 for high quality)
+ * @param apiEndpoint Base URL for ElevenLabs API (default: "https://api.elevenlabs.io")
+ * @param websocketUrl WebSocket URL for LiveKit WebRTC connection (default: "wss://livekit.rtc.elevenlabs.io")
  */
 data class ConversationConfig(
     val agentId: String? = null,
@@ -29,6 +31,8 @@ data class ConversationConfig(
     val userId: String? = null,
     val textOnly: Boolean = false,
     val audioInputSampleRate: Int = 48000,
+    val apiEndpoint: String = "https://api.elevenlabs.io",
+    val websocketUrl: String = "wss://livekit.rtc.elevenlabs.io",
     val overrides: Overrides? = null,
     val customLlmExtraBody: Map<String, Any>? = null,
     val dynamicVariables: Map<String, Any>? = null,

@@ -80,6 +80,8 @@ val config = ConversationConfig(
     agentId = "<your_public_agent_id>", // OR conversationToken = "<token>"
     userId = "your-user-id",
     audioInputSampleRate = "48000", // Optional parameter, defaults to 48kHz. Lower values can help with audio input issues on slower connections
+    apiEndpoint = "https://api.elevenlabs.io", // Optional: Custom API endpoint
+    websocketUrl = "wss://livekit.rtc.elevenlabs.io", // Optional: Custom WebSocket URL
     // Optional callbacks
     onConnect = { conversationId ->
         // Connected, you can store conversationId via session.getId() too
@@ -145,6 +147,29 @@ session.endSession()
 
 - **Public agents** (no auth): Initialize with `agentId` in `ConversationConfig`. The SDK requests a conversation token from ElevenLabs without needing an API key on device.
 - **Private agents** (auth): Initialize with `conversationToken` in `ConversationConfig`. Issued by your server (your backend uses the ElevenLabs API key). **Never embed API keys in clients.**
+
+---
+
+## Advanced Configuration
+
+### Custom Endpoints
+
+For self-hosted or custom deployments, you can configure custom endpoints:
+
+```kotlin
+val config = ConversationConfig(
+    agentId = "<your_agent_id>",
+    apiEndpoint = "https://custom-api.example.com",      // Custom API endpoint (default: "https://api.elevenlabs.io")
+    websocketUrl = "wss://custom-webrtc.example.com"     // Custom WebSocket URL (default: "wss://livekit.rtc.elevenlabs.io")
+)
+```
+
+- **apiEndpoint**: Base URL for the ElevenLabs API. Used for fetching conversation tokens when using public agents.
+- **websocketUrl**: WebSocket URL for the LiveKit WebRTC connection. Used for the real-time audio/data channel connection.
+
+Both parameters are optional and default to the standard ElevenLabs production endpoints.
+
+**Note**: If you are using [data residency](https://elevenlabs.io/docs/product-guides/administration/data-residency), make sure that both `apiEndpoint` and `websocketUrl` point to the same geographic region. For example `https://api.eu.residency.elevenlabs.io` and `wss://livekit.rtc.eu.residency.elevenlabs.io` respectively. A mismatch will result in errors when authenticating.
 
 ---
 
