@@ -85,7 +85,7 @@ internal class ConversationSessionImpl(
             }
 
             // Start the connection
-            val serverUrl = "wss://livekit.rtc.elevenlabs.io" // Default URL, can be configured
+            val serverUrl = config.websocketUrl
             val token = config.conversationToken ?: ""
             Log.d("ConversationSession", "Starting connection to $serverUrl")
             // Wrap onConnect to capture conversationId while preserving user's callback
