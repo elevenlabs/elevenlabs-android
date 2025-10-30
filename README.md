@@ -103,7 +103,25 @@ val config = ConversationConfig(
     },
     onVadScore = { score ->
         // Voice Activity Detection score, range from 0 to 1 where higher values indicate higher confidence of speech
-    }
+    },
+    onUserTranscript = { transcript ->
+        // User's speech transcribed to text
+    },
+    onAgentResponse = { response ->
+        // Agent's text response
+    },
+    onAgentResponseCorrection = { originalResponse, correctedResponse ->
+        // Agent response was corrected after interruption
+    },
+    onAgentToolResponse = { toolName, toolCallId, toolType, isError ->
+        // Agent tool execution completed
+    },
+    onConversationInitiationMetadata = { conversationId, agentOutputFormat, userInputFormat ->
+        // Conversation metadata including audio formats
+    },
+    onInterruption = { eventId ->
+        // User interrupted the agent while speaking
+    },
     // List of client tools the agent can invoke
     clientTools = mapOf(
         "logMessage" to object : ClientTool {
@@ -175,13 +193,30 @@ Both parameters are optional and default to the standard ElevenLabs production e
 
 ## Callbacks Overview
 
+### Core Callbacks
+
 - **onConnect(conversationId: String)**: Fired once connected. Conversation ID can also be read via `session.getId()`.
 - **onMessage(source: String, message: String)**: Raw JSON messages from data channel. `source` is `"ai"` or `"user"`.
 - **onModeChange(mode: ConversationMode)**: `ConversationMode.SPEAKING` or `ConversationMode.LISTENING`; drive your speaking indicator.
 - **onStatusChange(status: ConversationStatus)**: Enum values: `CONNECTED`, `CONNECTING`, `DISCONNECTED`, `DISCONNECTING`, `ERROR`.
-- **onCanSendFeedbackChange(canSend: Boolean)**: Enable/disable feedback buttons.
+
+### Conversation Event Callbacks
+
+- **onUserTranscript(transcript: String)**: User's speech transcribed to text in real-time.
+- **onAgentResponse(response: String)**: Agent's text response before it's converted to speech.
+- **onAgentResponseCorrection(originalResponse: String, correctedResponse: String)**: Agent response was corrected after user interruption.
+- **onInterruption(eventId: Int)**: User interrupted the agent while speaking.
+
+### Tool & Feedback Callbacks
+
+- **onCanSendFeedbackChange(canSend: Boolean)**: Enable/disable feedback buttons based on whether feedback can be sent.
 - **onUnhandledClientToolCall(call)**: Agent attempted to call a client tool not registered on the device.
-- **onVadScore**: Voice Activity Detection score. Ranges from 0 to 1 where higher values indicate confidence of speech.
+- **onAgentToolResponse(toolName: String, toolCallId: String, toolType: String, isError: Boolean)**: Agent tool execution completed (server-side or client-side).
+
+### Audio & Metadata Callbacks
+
+- **onVadScore(score: Float)**: Voice Activity Detection score. Ranges from 0 to 1 where higher values indicate confidence of speech.
+- **onConversationInitiationMetadata(conversationId: String, agentOutputFormat: String, userInputFormat: String)**: Conversation metadata including audio format details.
 
 ---
 
