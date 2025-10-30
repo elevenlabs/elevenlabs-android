@@ -1,6 +1,8 @@
 package io.elevenlabs
 
 import io.elevenlabs.models.ConversationEvent.ClientToolCall
+import io.elevenlabs.models.ConversationMode
+import io.elevenlabs.models.ConversationStatus
 
 /**
  * Configuration class for conversation sessions
@@ -39,11 +41,17 @@ data class ConversationConfig(
     val clientTools: Map<String, ClientTool> = emptyMap(),
     val onConnect: ((conversationId: String) -> Unit)? = null,
     val onMessage: ((source: String, message: String) -> Unit)? = null,
-    val onModeChange: ((mode: String) -> Unit)? = null,
-    val onStatusChange: ((status: String) -> Unit)? = null,
+    val onModeChange: ((mode: ConversationMode) -> Unit)? = null,
+    val onStatusChange: ((status: ConversationStatus) -> Unit)? = null,
     val onCanSendFeedbackChange: ((canSend: Boolean) -> Unit)? = null,
     val onUnhandledClientToolCall: ((ClientToolCall) -> Unit)? = null,
-    val onVadScore: ((score: Float) -> Unit)? = null
+    val onVadScore: ((score: Float) -> Unit)? = null,
+    val onUserTranscript: ((userTranscript: String) -> Unit)? = null,
+    val onAgentResponse: ((agentResponse: String) -> Unit)? = null,
+    val onAgentResponseCorrection: ((originalResponse: String, correctedResponse: String) -> Unit)? = null,
+    val onAgentToolResponse: ((toolName: String, toolCallId: String, toolType: String, isError: Boolean) -> Unit)? = null,
+    val onConversationInitiationMetadata: ((conversationId: String, agentOutputFormat: String, userInputFormat: String) -> Unit)? = null,
+    val onInterruption: ((eventId: Int) -> Unit)? = null
 
 ) {
     init {

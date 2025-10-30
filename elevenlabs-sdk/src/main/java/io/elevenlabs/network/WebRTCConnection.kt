@@ -3,6 +3,9 @@ package io.elevenlabs.network
 import android.content.Context
 import android.util.Log
 import io.elevenlabs.ConversationConfig
+import io.elevenlabs.models.ConversationMode
+import io.elevenlabs.models.ConversationStatus
+import io.elevenlabs.models.toConversationStatus
 import io.livekit.android.room.Room
 import io.livekit.android.room.participant.LocalParticipant
 import io.livekit.android.room.participant.Participant
@@ -290,7 +293,7 @@ class WebRTCConnection(
                 latestConfig?.onMessage?.invoke(source, message)
 
                 // Toggle mode based on source
-                val mode = if (participant?.isSpeaking == true) "speaking" else "listening"
+                val mode = if (participant?.isSpeaking == true) ConversationMode.SPEAKING else ConversationMode.LISTENING
                 latestConfig?.onModeChange?.invoke(mode)
             } catch (t: Throwable) {
                 Log.d("WebRTCConnection", "onMessage callback threw: ${t.message}")
@@ -308,14 +311,8 @@ class WebRTCConnection(
             _connectionState.value = newState
             connectionStateListener?.invoke(newState)
             // Invoke user status change callback if provided
-            val statusString = when (newState) {
-                ConnectionState.CONNECTED -> "connected"
-                ConnectionState.CONNECTING -> "connecting"
-                ConnectionState.DISCONNECTED, ConnectionState.ERROR, ConnectionState.RECONNECTING -> "disconnected"
-                else -> "disconnected"
-            }
             try {
-                latestConfig?.onStatusChange?.invoke(statusString)
+                latestConfig?.onStatusChange?.invoke(newState.toConversationStatus())
             } catch (_: Throwable) { }
         }
     }

@@ -1,9 +1,9 @@
 package io.elevenlabs
 
-import androidx.lifecycle.LiveData
 import io.elevenlabs.models.ConversationEvent
 import io.elevenlabs.models.ConversationMode
 import io.elevenlabs.models.ConversationStatus
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Represents an active conversation session with an ElevenLabs agent
@@ -21,19 +21,19 @@ interface ConversationSession {
     /**
      * Current connection status of the conversation session
      */
-    val status: LiveData<ConversationStatus>
+    val status: StateFlow<ConversationStatus>
 
     /**
      * Current conversation mode (listening/speaking)
      */
-    val mode: LiveData<ConversationMode>
+    val mode: StateFlow<ConversationMode>
 
     // Message history is intentionally not tracked; rely on server transcripts
 
     /**
      * Whether the microphone is currently muted
      */
-    val isMuted: LiveData<Boolean>
+    val isMuted: StateFlow<Boolean>
 
     // Session Control Methods
 

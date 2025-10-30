@@ -13,6 +13,7 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import io.elevenlabs.example.models.UiState
 import io.elevenlabs.example.viewmodels.ConversationViewModel
+import io.elevenlabs.models.ConversationMode
 import io.elevenlabs.models.ConversationStatus
 import androidx.appcompat.app.AlertDialog
 import android.widget.Toast
@@ -161,7 +162,7 @@ class MainActivity : AppCompatActivity() {
 
         // Mode changes: update indicator
         viewModel.mode.observe(this) { mode ->
-            updateModeUI(mode ?: "listening")
+            mode?.let { updateModeUI(it) }
         }
 
         viewModel.errorMessage.observe(this) { error ->
@@ -244,9 +245,9 @@ class MainActivity : AppCompatActivity() {
         muteButton.isEnabled = isConnected
     }
 
-    private fun updateModeUI(mode: String) {
-        modeLabel.text = if (mode == "speaking") "Speaking" else "Listening"
-        val color = if (mode == "speaking") R.color.status_connected else R.color.status_disconnected
+    private fun updateModeUI(mode: ConversationMode) {
+        modeLabel.text = if (mode == ConversationMode.SPEAKING) "Speaking" else "Listening"
+        val color = if (mode == ConversationMode.SPEAKING) R.color.status_connected else R.color.status_disconnected
         modeDot.background = android.graphics.drawable.ShapeDrawable(android.graphics.drawable.shapes.OvalShape()).apply {
             paint.color = ContextCompat.getColor(this@MainActivity, color)
         }

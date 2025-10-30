@@ -20,7 +20,14 @@ class ConversationEventHandler(
     private val messageCallback: (OutgoingEvent) -> Unit,
     private val onCanSendFeedbackChange: ((Boolean) -> Unit)? = null,
     private val onUnhandledClientToolCall: ((ConversationEvent.ClientToolCall) -> Unit)? = null,
-    private val onVadScore: ((Float) -> Unit)? = null
+    private val onVadScore: ((Float) -> Unit)? = null,
+    private val onUserTranscript: ((String) -> Unit)? = null,
+    private val onAgentResponse: ((String) -> Unit)? = null,
+    private val onAgentResponseCorrection: ((String, String) -> Unit)? = null,
+    private val onAgentToolResponse: ((String, String, String, Boolean) -> Unit)? = null,
+    private val onConversationInitiationMetadata: ((String, String, String) -> Unit)? = null,
+    private val onInterruption: ((Int) -> Unit)? = null,
+    private val onEndCall: (suspend () -> Unit)? = null
 ) {
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -80,22 +87,50 @@ class ConversationEventHandler(
             }
         }
 
-        Log.d("ConvEventHandler", "Agent response: ${event.agentResponse}")
+
+        try {
+            onAgentResponse?.invoke(event.agentResponse)
+        } catch (e: Exception) {
+            Log.e("ConvEventHandler", "Error in onAgentResponse callback: ${e.message}", e)
+        }
     }
 
     /**
      * Handle user transcript events
      */
     private suspend fun handleUserTranscript(event: ConversationEvent.UserTranscript) {
-        Log.d("ConvEventHandler", "User transcript: ${event.userTranscript}")
+        try {
+            onUserTranscript?.invoke(event.userTranscript)
+        } catch (e: Exception) {
+            Log.e("ConvEventHandler", "Error in onUserTranscript callback: ${e.message}", e)
+        }
     }
 
     private fun handleAgentResponseCorrection(event: ConversationEvent.AgentResponseCorrection) {
-        Log.d("ConvEventHandler", "Agent response correction: original='${event.originalAgentResponse}' corrected='${event.correctedAgentResponse}'")
+        try {
+            onAgentResponseCorrection?.invoke(event.originalAgentResponse, event.correctedAgentResponse)
+        } catch (e: Exception) {
+            Log.e("ConvEventHandler", "Error in onAgentResponseCorrection callback: ${e.message}", e)
+        }
     }
 
     private fun handleAgentToolResponse(event: ConversationEvent.AgentToolResponse) {
-        Log.d("ConvEventHandler", "Agent tool response: name=${event.toolName}, id=${event.toolCallId}, type=${event.toolType}, isError=${event.isError}")
+        try {
+            onAgentToolResponse?.invoke(event.toolName, event.toolCallId, event.toolType, event.isError)
+        } catch (e: Exception) {
+            Log.e("ConvEventHandler", "Error in onAgentToolResponse callback: ${e.message}", e)
+        }
+
+        if (event.toolName == "end_call") {
+
+            scope.launch {
+                try {
+                    onEndCall?.invoke()
+                } catch (e: Exception) {
+                    Log.e("ConvEventHandler", "Error ending call: ${e.message}", e)
+                }
+            }
+        }
     }
 
     private fun handleAudio(event: ConversationEvent.Audio) {
@@ -103,14 +138,23 @@ class ConversationEventHandler(
     }
 
     private fun handleConversationInitiationMetadata(event: ConversationEvent.ConversationInitiationMetadata) {
-        Log.d("ConvEventHandler", "Conversation init: id=${event.conversationId}, agentOut=${event.agentOutputAudioFormat}, userIn=${event.userInputAudioFormat}")
+        try {
+            onConversationInitiationMetadata?.invoke(event.conversationId, event.agentOutputAudioFormat, event.userInputAudioFormat)
+        } catch (e: Exception) {
+            Log.e("ConvEventHandler", "Error in onConversationInitiationMetadata callback: ${e.message}", e)
+        }
     }
 
     private fun handleInterruption(event: ConversationEvent.Interruption) {
         // Switch to listening when agent is interrupted; disable feedback availability
         _conversationMode.value = ConversationMode.LISTENING
         onCanSendFeedbackChange?.invoke(false)
-        Log.d("ConvEventHandler", "Interruption: eventId=${event.eventId}")
+
+        try {
+            onInterruption?.invoke(event.eventId)
+        } catch (e: Exception) {
+            Log.e("ConvEventHandler", "Error in onInterruption callback: ${e.message}", e)
+        }
     }
 
     /**
