@@ -2,9 +2,6 @@ package io.elevenlabs
 
 import android.content.Context
 import android.util.Log
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
-import androidx.lifecycle.asLiveData
 import io.elevenlabs.audio.AudioManager
 import io.elevenlabs.audio.LiveKitAudioManager
 import io.elevenlabs.models.ConversationMode
@@ -16,6 +13,8 @@ import io.elevenlabs.network.ConversationEventParser
 import io.elevenlabs.network.WebRTCConnection
 import io.livekit.android.room.Room
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Complete implementation of ConversationSession
@@ -51,20 +50,41 @@ internal class ConversationSessionImpl(
         },
         onVadScore = { score ->
             try { config.onVadScore?.invoke(score) } catch (_: Throwable) {}
+        },
+        onUserTranscript = { transcript ->
+            try { config.onUserTranscript?.invoke(transcript) } catch (_: Throwable) {}
+        },
+        onAgentResponse = { response ->
+            try { config.onAgentResponse?.invoke(response) } catch (_: Throwable) {}
+        },
+        onAgentResponseCorrection = { original, corrected ->
+            try { config.onAgentResponseCorrection?.invoke(original, corrected) } catch (_: Throwable) {}
+        },
+        onAgentToolResponse = { toolName, toolCallId, toolType, isError ->
+            try { config.onAgentToolResponse?.invoke(toolName, toolCallId, toolType, isError) } catch (_: Throwable) {}
+        },
+        onConversationInitiationMetadata = { conversationId, agentOutputFormat, userInputFormat ->
+            try { config.onConversationInitiationMetadata?.invoke(conversationId, agentOutputFormat, userInputFormat) } catch (_: Throwable) {}
+        },
+        onInterruption = { eventId ->
+            try { config.onInterruption?.invoke(eventId) } catch (_: Throwable) {}
+        },
+        onEndCall = {
+            endSession()
         }
     )
 
-    // LiveData backing fields
-    private val _status = MutableLiveData<ConversationStatus>(ConversationStatus.DISCONNECTED)
+    // StateFlow backing fields
+    private val _status = MutableStateFlow<ConversationStatus>(ConversationStatus.DISCONNECTED)
 
-    // Public observable properties using StateFlow -> LiveData conversion
-    override val status: LiveData<ConversationStatus> = _status
-    override val mode: LiveData<ConversationMode> = eventHandler.conversationMode.asLiveData()
-    override val isMuted: LiveData<Boolean> =
+    // Public observable properties exposed as StateFlow
+    override val status: StateFlow<ConversationStatus> = _status
+    override val mode: StateFlow<ConversationMode> = eventHandler.conversationMode
+    override val isMuted: StateFlow<Boolean> =
         if (audioManager is LiveKitAudioManager) {
-            audioManager.muteState.asLiveData()
+            audioManager.muteState
         } else {
-            MutableLiveData(false)
+            MutableStateFlow(false)
         }
 
         override suspend fun start() {

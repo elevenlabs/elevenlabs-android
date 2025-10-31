@@ -90,10 +90,10 @@ val config = ConversationConfig(
         // Raw JSON messages from data channel; useful for logging/telemetry
     },
     onModeChange = { mode ->
-        // "speaking" | "listening" — drive UI indicators
+        // ConversationMode.SPEAKING | ConversationMode.LISTENING — drive UI indicators
     },
     onStatusChange = { status ->
-        // "connected" | "connecting" | "disconnected"
+        // ConversationStatus enum: CONNECTED, CONNECTING, DISCONNECTED, DISCONNECTING, ERROR
     },
     onCanSendFeedbackChange = { canSend ->
         // Enable/disable thumbs up/down
@@ -103,7 +103,25 @@ val config = ConversationConfig(
     },
     onVadScore = { score ->
         // Voice Activity Detection score, range from 0 to 1 where higher values indicate higher confidence of speech
-    }
+    },
+    onUserTranscript = { transcript ->
+        // User's speech transcribed to text
+    },
+    onAgentResponse = { response ->
+        // Agent's text response
+    },
+    onAgentResponseCorrection = { originalResponse, correctedResponse ->
+        // Agent response was corrected after interruption
+    },
+    onAgentToolResponse = { toolName, toolCallId, toolType, isError ->
+        // Agent tool execution completed
+    },
+    onConversationInitiationMetadata = { conversationId, agentOutputFormat, userInputFormat ->
+        // Conversation metadata including audio formats
+    },
+    onInterruption = { eventId ->
+        // User interrupted the agent while speaking
+    },
     // List of client tools the agent can invoke
     clientTools = mapOf(
         "logMessage" to object : ClientTool {
@@ -175,13 +193,30 @@ Both parameters are optional and default to the standard ElevenLabs production e
 
 ## Callbacks Overview
 
+### Core Callbacks
+
 - **onConnect(conversationId: String)**: Fired once connected. Conversation ID can also be read via `session.getId()`.
 - **onMessage(source: String, message: String)**: Raw JSON messages from data channel. `source` is `"ai"` or `"user"`.
-- **onModeChange(mode: String)**: `"speaking"` or `"listening"`; drive your speaking indicator.
-- **onStatusChange(status: String)**: `"connected" | "connecting" | "disconnected"`.
-- **onCanSendFeedbackChange(canSend: Boolean)**: Enable/disable feedback buttons.
+- **onModeChange(mode: ConversationMode)**: `ConversationMode.SPEAKING` or `ConversationMode.LISTENING`; drive your speaking indicator.
+- **onStatusChange(status: ConversationStatus)**: Enum values: `CONNECTED`, `CONNECTING`, `DISCONNECTED`, `DISCONNECTING`, `ERROR`.
+
+### Conversation Event Callbacks
+
+- **onUserTranscript(transcript: String)**: User's speech transcribed to text in real-time.
+- **onAgentResponse(response: String)**: Agent's text response before it's converted to speech.
+- **onAgentResponseCorrection(originalResponse: String, correctedResponse: String)**: Agent response was corrected after user interruption.
+- **onInterruption(eventId: Int)**: User interrupted the agent while speaking.
+
+### Tool & Feedback Callbacks
+
+- **onCanSendFeedbackChange(canSend: Boolean)**: Enable/disable feedback buttons based on whether feedback can be sent.
 - **onUnhandledClientToolCall(call)**: Agent attempted to call a client tool not registered on the device.
-- **onVadScore**: Voice Activity Detection score. Ranges from 0 to 1 where higher values indicate confidence of speech.
+- **onAgentToolResponse(toolName: String, toolCallId: String, toolType: String, isError: Boolean)**: Agent tool execution completed (server-side or client-side).
+
+### Audio & Metadata Callbacks
+
+- **onVadScore(score: Float)**: Voice Activity Detection score. Ranges from 0 to 1 where higher values indicate confidence of speech.
+- **onConversationInitiationMetadata(conversationId: String, agentOutputFormat: String, userInputFormat: String)**: Conversation metadata including audio format details.
 
 ---
 
@@ -234,7 +269,96 @@ session.setMicMuted(true)   // mute
 session.setMicMuted(false)  // unmute
 ```
 
-Observe `session.isMuted` to update the UI label between “Mute” and “Unmute”.
+Observe `session.isMuted` to update the UI label between "Mute" and "Unmute".
+
+---
+
+## Observing Session State
+
+The SDK uses **Kotlin StateFlow** for reactive state management. The `ConversationSession` exposes three StateFlow properties:
+
+- `status: StateFlow<ConversationStatus>` - Connection status (CONNECTED, CONNECTING, DISCONNECTED, etc.)
+- `mode: StateFlow<ConversationMode>` - Conversation mode (SPEAKING, LISTENING)
+- `isMuted: StateFlow<Boolean>` - Microphone mute state
+
+### In a ViewModel (Recommended)
+
+Collect flows in your ViewModel's coroutine scope:
+
+```kotlin
+class MyViewModel : ViewModel() {
+    private val _statusText = MutableLiveData<String>()
+    val statusText: LiveData<String> = _statusText
+
+    fun observeSession(session: ConversationSession) {
+        viewModelScope.launch {
+            session.status.collect { status ->
+                _statusText.value = when (status) {
+                    ConversationStatus.CONNECTED -> "Connected"
+                    ConversationStatus.CONNECTING -> "Connecting..."
+                    ConversationStatus.DISCONNECTED -> "Disconnected"
+                    ConversationStatus.DISCONNECTING -> "Disconnecting..."
+                    ConversationStatus.ERROR -> "Error"
+                }
+            }
+        }
+
+        viewModelScope.launch {
+            session.mode.collect { mode ->
+                // Update UI based on speaking/listening mode
+                when (mode) {
+                    ConversationMode.SPEAKING -> showSpeakingIndicator()
+                    ConversationMode.LISTENING -> showListeningIndicator()
+                }
+            }
+        }
+    }
+}
+```
+
+### In an Activity or Fragment
+
+Use `lifecycleScope` with `repeatOnLifecycle` for lifecycle-aware collection:
+
+```kotlin
+class MyActivity : AppCompatActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        val session = ConversationClient.startSession(config, this)
+
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    session.status.collect { status ->
+                        updateStatusUI(status)
+                    }
+                }
+                launch {
+                    session.isMuted.collect { muted ->
+                        muteButton.text = if (muted) "Unmute" else "Mute"
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+### Converting to LiveData (Optional)
+
+If you prefer LiveData, use the provided extension function:
+
+```kotlin
+import io.elevenlabs.utils.asLiveData
+
+val statusLiveData: LiveData<ConversationStatus> = session.status.asLiveData()
+val modeLiveData: LiveData<ConversationMode> = session.mode.asLiveData()
+
+statusLiveData.observe(this) { status ->
+    // Handle status changes
+}
+```
 
 ---
 

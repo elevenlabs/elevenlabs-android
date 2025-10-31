@@ -10,6 +10,7 @@ import androidx.lifecycle.viewModelScope
 import io.elevenlabs.ConversationClient
 import io.elevenlabs.ConversationSession
 import io.elevenlabs.example.models.UiState
+import io.elevenlabs.models.ConversationMode
 import io.elevenlabs.models.ConversationStatus
 import kotlinx.coroutines.launch
 
@@ -40,9 +41,9 @@ class ConversationViewModel(application: Application) : AndroidViewModel(applica
 
     private var hasAudioPermission: Boolean = false
 
-    // Mode ("speaking" | "listening") propagated from SDK callback
-    private val _mode = MutableLiveData<String>()
-    val mode: LiveData<String> = _mode
+    // Mode (SPEAKING | LISTENING) propagated from SDK callback
+    private val _mode = MutableLiveData<ConversationMode>()
+    val mode: LiveData<ConversationMode> = _mode
 
     // Can send feedback state
     private val _canSendFeedback = MutableLiveData<Boolean>(false)
@@ -90,7 +91,7 @@ class ConversationViewModel(application: Application) : AndroidViewModel(applica
                         // Receive messages from the server. Can be quite noisy hence commented out
                         // Log.d("ConversationViewModel", "onMessage [$source]: $message")
                      },
-                    onModeChange = { mode ->
+                    onModeChange = { mode: ConversationMode ->
                         _mode.postValue(mode)
                     },
                     onStatusChange = { status ->
@@ -108,6 +109,24 @@ class ConversationViewModel(application: Application) : AndroidViewModel(applica
                         // Can be used to trigger UI changes or audio processing decisions.
                         // Log commented out as it's quite noisy
                         // Log.d("ConversationViewModel", "onVadScore: $score")
+                    },
+                    onUserTranscript = { transcript ->
+                        Log.d("ConversationViewModel", "onUserTranscript: $transcript")
+                    },
+                    onAgentResponse = { response ->
+                        Log.d("ConversationViewModel", "onAgentResponse: $response")
+                    },
+                    onAgentResponseCorrection = { originalResponse, correctedResponse ->
+                        Log.d("ConversationViewModel", "onAgentResponseCorrection: original='$originalResponse', corrected='$correctedResponse'")
+                    },
+                    onAgentToolResponse = { toolName, toolCallId, toolType, isError ->
+                        Log.d("ConversationViewModel", "onAgentToolResponse: tool=$toolName, callId=$toolCallId, type=$toolType, isError=$isError")
+                    },
+                    onConversationInitiationMetadata = { conversationId, agentOutputFormat, userInputFormat ->
+                        Log.d("ConversationViewModel", "onConversationInitiationMetadata: id=$conversationId, agentOut=$agentOutputFormat, userIn=$userInputFormat")
+                    },
+                    onInterruption = { eventId ->
+                        Log.d("ConversationViewModel", "onInterruption: eventId=$eventId")
                     }
                 )
 
@@ -115,25 +134,29 @@ class ConversationViewModel(application: Application) : AndroidViewModel(applica
 
                 currentSession = session
 
-                // Observe session status
-                session.status.observeForever { status ->
-                    _sessionStatus.value = status
-                    _uiState.value = when (status) {
-                        ConversationStatus.CONNECTED -> UiState.Connected
-                        ConversationStatus.CONNECTING -> UiState.Connecting
-                        ConversationStatus.DISCONNECTED -> UiState.Idle
-                        ConversationStatus.DISCONNECTING -> UiState.Disconnecting
-                        ConversationStatus.ERROR -> UiState.Error
-                    }
+                // Collect session status flow
+                viewModelScope.launch {
+                    session.status.collect { status ->
+                        _sessionStatus.postValue(status)
+                        _uiState.postValue(when (status) {
+                            ConversationStatus.CONNECTED -> UiState.Connected
+                            ConversationStatus.CONNECTING -> UiState.Connecting
+                            ConversationStatus.DISCONNECTED -> UiState.Idle
+                            ConversationStatus.DISCONNECTING -> UiState.Disconnecting
+                            ConversationStatus.ERROR -> UiState.Error
+                        })
 
-                    if (status == ConversationStatus.ERROR) {
-                        _errorMessage.postValue("Connection failed. Please try again.")
+                        if (status == ConversationStatus.ERROR) {
+                            _errorMessage.postValue("Connection failed. Please try again.")
+                        }
                     }
                 }
 
-                // Observe mute state if available
-                session.isMuted.observeForever { muted ->
-                    _isMuted.value = muted
+                // Collect mute state flow
+                viewModelScope.launch {
+                    session.isMuted.collect { muted ->
+                        _isMuted.postValue(muted)
+                    }
                 }
 
                 Log.d("ConversationViewModel", "Session created and started successfully")

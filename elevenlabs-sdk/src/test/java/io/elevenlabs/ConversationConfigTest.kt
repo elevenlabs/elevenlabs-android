@@ -1,5 +1,7 @@
 package io.elevenlabs
 
+import io.elevenlabs.models.ConversationMode
+import io.elevenlabs.models.ConversationStatus
 import io.mockk.mockk
 import org.junit.Test
 import org.junit.Assert.*
@@ -162,5 +164,82 @@ class ConversationConfigTest {
         assertNull(config.onStatusChange)
         assertNull(config.onCanSendFeedbackChange)
         assertNull(config.onUnhandledClientToolCall)
+    }
+
+    @Test
+    fun `onModeChange callback accepts ConversationMode enum`() {
+        var receivedMode: ConversationMode? = null
+        val onModeChange: (ConversationMode) -> Unit = { mode ->
+            receivedMode = mode
+        }
+
+        val config = ConversationConfig(
+            agentId = "test-agent",
+            onModeChange = onModeChange
+        )
+
+        // Verify callback can be invoked with enum values
+        config.onModeChange?.invoke(ConversationMode.LISTENING)
+        assertEquals(ConversationMode.LISTENING, receivedMode)
+
+        config.onModeChange?.invoke(ConversationMode.SPEAKING)
+        assertEquals(ConversationMode.SPEAKING, receivedMode)
+    }
+
+    @Test
+    fun `onStatusChange callback accepts ConversationStatus enum`() {
+        var receivedStatus: ConversationStatus? = null
+        val onStatusChange: (ConversationStatus) -> Unit = { status ->
+            receivedStatus = status
+        }
+
+        val config = ConversationConfig(
+            agentId = "test-agent",
+            onStatusChange = onStatusChange
+        )
+
+        // Verify callback can be invoked with enum values
+        config.onStatusChange?.invoke(ConversationStatus.DISCONNECTED)
+        assertEquals(ConversationStatus.DISCONNECTED, receivedStatus)
+
+        config.onStatusChange?.invoke(ConversationStatus.CONNECTING)
+        assertEquals(ConversationStatus.CONNECTING, receivedStatus)
+
+        config.onStatusChange?.invoke(ConversationStatus.CONNECTED)
+        assertEquals(ConversationStatus.CONNECTED, receivedStatus)
+
+        config.onStatusChange?.invoke(ConversationStatus.DISCONNECTING)
+        assertEquals(ConversationStatus.DISCONNECTING, receivedStatus)
+
+        config.onStatusChange?.invoke(ConversationStatus.ERROR)
+        assertEquals(ConversationStatus.ERROR, receivedStatus)
+    }
+
+    @Test
+    fun `enum callbacks allow exhaustive when statements`() {
+        val config = ConversationConfig(
+            agentId = "test-agent",
+            onModeChange = { mode ->
+                // This when statement is exhaustive due to enum type
+                when (mode) {
+                    ConversationMode.LISTENING -> println("Listening")
+                    ConversationMode.SPEAKING -> println("Speaking")
+                }
+            },
+            onStatusChange = { status ->
+                // This when statement is exhaustive due to enum type
+                when (status) {
+                    ConversationStatus.DISCONNECTED -> println("Disconnected")
+                    ConversationStatus.CONNECTING -> println("Connecting")
+                    ConversationStatus.CONNECTED -> println("Connected")
+                    ConversationStatus.DISCONNECTING -> println("Disconnecting")
+                    ConversationStatus.ERROR -> println("Error")
+                }
+            }
+        )
+
+        // Verify config was created successfully
+        assertNotNull(config.onModeChange)
+        assertNotNull(config.onStatusChange)
     }
 }
