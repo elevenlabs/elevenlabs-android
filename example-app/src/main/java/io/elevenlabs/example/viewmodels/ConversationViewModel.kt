@@ -7,13 +7,11 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.asLiveData
 import io.elevenlabs.ConversationClient
 import io.elevenlabs.ConversationSession
 import io.elevenlabs.example.models.UiState
 import io.elevenlabs.models.ConversationMode
 import io.elevenlabs.models.ConversationStatus
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**

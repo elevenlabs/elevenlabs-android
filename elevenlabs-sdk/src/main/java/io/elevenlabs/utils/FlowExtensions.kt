@@ -23,5 +23,5 @@ import kotlinx.coroutines.flow.StateFlow
  * @receiver StateFlow to convert
  * @return LiveData that mirrors the StateFlow's values
  */
-fun <T> StateFlow<T>.asLiveData(): LiveData<T> = this.asLiveData()
+fun <T> StateFlow<T>.asLiveData(): LiveData<T> = (this as kotlinx.coroutines.flow.Flow<T>).asLiveData()
 
