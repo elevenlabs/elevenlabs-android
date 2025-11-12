@@ -1,6 +1,5 @@
 package io.elevenlabs.audio
 
-import android.app.Activity
 import android.content.Context
 import android.util.Log
 import io.livekit.android.room.Room
@@ -136,11 +135,13 @@ class LiveKitAudioManager(
         val clampedVolume = volume.coerceIn(0.0f, 1.0f)
 
         try {
-            // Set volume for remote audio tracks
-            remoteAudioTracks.forEach { track ->
-                // Note: Volume control might need to be implemented differently
-                // depending on LiveKit's API capabilities
-                // This is a placeholder implementation
+            // Set volume for all remote audio tracks from remote participants
+            room.remoteParticipants.values.forEach { participant ->
+                participant.audioTrackPublications.forEach { (_, track) ->
+                    if (track is RemoteAudioTrack) {
+                        track.setVolume(clampedVolume.toDouble())
+                    }
+                }
             }
 
             _volume.value = clampedVolume
