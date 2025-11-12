@@ -134,9 +134,11 @@ val config = ConversationConfig(
         }
     ),
 )
+```
 
 > **Note:** If a tool is configured with `expects_response=false` on the server, return `null` from `execute` to skip sending a tool result back to the agent.
 
+```
 // In an Activity context
 val session: ConversationSession = ConversationClient.startSession(config, this)
 
