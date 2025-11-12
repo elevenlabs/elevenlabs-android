@@ -189,6 +189,14 @@ internal class ConversationSessionImpl(
         audioManager.setMicMuted(muted)
     }
 
+    override fun setVolume(volume: Float) {
+        audioManager.setVolume(volume)
+    }
+
+    override fun getVolume(): Float {
+        return audioManager.getVolume()
+    }
+
     override fun registerTool(name: String, tool: ClientTool) {
         toolRegistry.registerTool(name, tool)
     }

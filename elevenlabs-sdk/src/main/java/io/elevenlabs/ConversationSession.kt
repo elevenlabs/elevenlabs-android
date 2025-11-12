@@ -95,6 +95,20 @@ interface ConversationSession {
      */
     suspend fun setMicMuted(muted: Boolean)
 
+    /**
+     * Set the playback volume
+     *
+     * @param volume Volume level from 0.0 (silent) to 1.0 (maximum)
+     */
+    fun setVolume(volume: Float)
+
+    /**
+     * Get the current playback volume
+     *
+     * @return Volume level from 0.0 to 1.0
+     */
+    fun getVolume(): Float
+
     // Tool Integration
 
     /**
