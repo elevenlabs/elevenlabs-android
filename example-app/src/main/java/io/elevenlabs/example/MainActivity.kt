@@ -41,6 +41,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var contextualButtonsRow: android.widget.LinearLayout
     private lateinit var muteButton: Button
     private lateinit var muteContainer: android.widget.LinearLayout
+    private lateinit var volumeSeekBar: android.widget.SeekBar
+    private lateinit var volumeContainer: android.widget.LinearLayout
 
     // No broadcast receiver; we use ViewModel.mode
     private lateinit var connectButton: Button
@@ -84,6 +86,8 @@ class MainActivity : AppCompatActivity() {
         userSendButton = findViewById(R.id.userSendButton)
         muteButton = findViewById(R.id.muteButton)
         muteContainer = findViewById(R.id.muteContainer)
+        volumeSeekBar = findViewById(R.id.volumeSeekBar)
+        volumeContainer = findViewById(R.id.volumeContainer)
 
         connectButton.isEnabled = true
         connectButton.setOnClickListener {
@@ -140,6 +144,18 @@ class MainActivity : AppCompatActivity() {
         viewModel.isMuted.observe(this) { muted ->
             muteButton.text = if (muted == true) "Unmute" else "Mute"
         }
+
+        // Volume control
+        volumeSeekBar.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
+                if (fromUser) {
+                    val volume = progress / 100.0f
+                    viewModel.setVolume(volume)
+                }
+            }
+            override fun onStartTrackingTouch(seekBar: android.widget.SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: android.widget.SeekBar?) {}
+        })
 
         // Send user activity when typing
         contextualEditText.addTextChangedListener(object : android.text.TextWatcher {
@@ -243,6 +259,8 @@ class MainActivity : AppCompatActivity() {
         userSendButton.isEnabled = isConnected
         muteContainer.visibility = if (isConnected) android.view.View.VISIBLE else android.view.View.GONE
         muteButton.isEnabled = isConnected
+        volumeContainer.visibility = if (isConnected) android.view.View.VISIBLE else android.view.View.GONE
+        volumeSeekBar.isEnabled = isConnected
     }
 
     private fun updateModeUI(mode: ConversationMode) {

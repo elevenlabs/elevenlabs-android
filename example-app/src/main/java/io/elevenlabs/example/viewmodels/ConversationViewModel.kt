@@ -243,6 +243,15 @@ class ConversationViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
+    fun setVolume(volume: Float) {
+        try {
+            currentSession?.setVolume(volume)
+            Log.d("ConversationViewModel", "Volume set to: $volume")
+        } catch (t: Throwable) {
+            Log.d("ConversationViewModel", "Failed to set volume: ${t.message}")
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         endConversation()

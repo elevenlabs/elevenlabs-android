@@ -198,6 +198,39 @@
 
     </LinearLayout>
 
+    <!-- Volume control below mute -->
+    <LinearLayout
+        android:id="@+id/volumeContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:layout_marginTop="12dp"
+        android:paddingHorizontal="24dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Volume"
+            android:textSize="14sp"
+            android:textColor="@color/on_background"
+            android:layout_marginBottom="8dp"
+            android:clickable="false"
+            android:focusable="false"/>
+
+        <SeekBar
+            android:id="@+id/volumeSeekBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="100"
+            android:progress="100"
+            android:clickable="true"
+            android:focusable="true"
+            android:enabled="false" />
+
+    </LinearLayout>
+
     <!-- Mode indicator: dot + label below the button -->
     <LinearLayout
         android:id="@+id/modeContainer"
