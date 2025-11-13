@@ -50,14 +50,26 @@ dependencies {
 
 ## Permissions
 
-Add microphone permission to your `AndroidManifest.xml`:
-```xml
-<uses-permission android:name="android.permission.RECORD_AUDIO" />
-<uses-permission android:name="android.permission.INTERNET" />
-<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-```
+You have to request the `android.permission.RECORD_AUDIO` runtime permission yourself before starting a voice session.
 
-Request runtime permission before starting a voice session. Camera permission is NOT required by this SDK.
+Permissions (and a service) are added to your `AndroidManifest.xml` automatically by the LiveKit SDK.
+Certain ones are not needed to use the ElevenLabs SDK so you can remove them if don't need them:
+
+```xml
+<manifest>
+    [...]
+    <uses-permission android:name="android.permission.CAMERA" tools:node="remove" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" tools:node="remove" />
+    [...]
+    <application>
+        [...]
+        <!--suppress AndroidDomInspection -->
+        <service
+            android:name="io.livekit.android.room.track.screencapture.ScreenCaptureService"
+            tools:node="remove" />
+    </application>
+</manifest>
+```
 
 ---
 
