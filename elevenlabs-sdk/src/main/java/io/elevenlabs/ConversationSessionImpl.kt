@@ -7,10 +7,8 @@ import io.elevenlabs.audio.LiveKitAudioManager
 import io.elevenlabs.models.ConversationMode
 import io.elevenlabs.models.ConversationStatus
 import io.elevenlabs.models.toConversationStatus
-import io.elevenlabs.network.ConnectionState
 import io.elevenlabs.network.BaseConnection
 import io.elevenlabs.network.ConversationEventParser
-import io.elevenlabs.network.WebRTCConnection
 import io.livekit.android.room.Room
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -87,7 +85,7 @@ internal class ConversationSessionImpl(
             MutableStateFlow(false)
         }
 
-        override suspend fun start() {
+    override suspend fun start() {
         try {
             _status.value = ConversationStatus.CONNECTING
 
@@ -113,7 +111,7 @@ internal class ConversationSessionImpl(
             val wrappedConfig = config.copy(
                 onConnect = { id ->
                     conversationId = id
-                    try { originalOnConnect?.invoke(id) } catch (_: Throwable) {}
+                    originalOnConnect?.runCatching { invoke(id) }
                 }
             )
 
@@ -132,6 +130,16 @@ internal class ConversationSessionImpl(
             }
         } catch (e: Exception) {
             _status.value = ConversationStatus.ERROR
+
+            // Clean up any resources that were initialized before the failure
+            audioManager.runCatching { stopRecording() }.logException("stopRecording")
+            audioManager.runCatching { stopPlayback() }.logException("stopPlayback")
+
+            connection.runCatching { disconnect() }.logException("disconnect")
+
+            eventHandler.runCatching { cleanup() }.logException("eventHandler.cleanup")
+            audioManager.runCatching { cleanup() }.logException("audioManager.cleanup")
+
             throw RuntimeException("Failed to start conversation session", e)
         }
     }
@@ -205,4 +213,9 @@ internal class ConversationSessionImpl(
         toolRegistry.unregisterTool(name)
     }
 
+    private fun Result<*>.logException(functionName: String) {
+        onFailure {
+            Log.w("ConversationSession", "Failed to run $functionName", it)
+        }
+    }
 }
