@@ -145,29 +145,34 @@ internal class ConversationSessionImpl(
     }
 
     override suspend fun endSession() {
-        try {
-            _status.value = ConversationStatus.DISCONNECTING
+        _status.value = ConversationStatus.DISCONNECTING
 
-            // Stop audio
-            audioManager.stopRecording()
-            audioManager.stopPlayback()
-
-            // Disconnect from network
-            connection.disconnect()
-
-            // Clean up resources
-            eventHandler.cleanup()
-            audioManager.cleanup()
-
-            _status.value = ConversationStatus.DISCONNECTED
-            conversationId = null
-
-        } catch (e: Exception) {
-            _status.value = ConversationStatus.ERROR
-            Log.d("ConversationSession", "Error ending conversation session: ${e.message}")
-        } finally {
-            scope.cancel()
+        val exceptionHandler: Result<*>.(String) -> Unit = { functionName ->
+            onFailure {
+                _status.value = ConversationStatus.ERROR
+                Log.w(
+                    "ConversationSession",
+                    "Error ending conversation session ($functionName): ${it.message}",
+                    it
+                )
+            }
         }
+
+        // Stop audio
+        audioManager.runCatching { stopRecording() }.exceptionHandler("stopRecording")
+        audioManager.runCatching { stopPlayback() }.exceptionHandler("stopPlayback")
+
+        // Disconnect from network
+        connection.runCatching { disconnect() }.exceptionHandler("disconnect")
+
+        // Clean up resources
+        eventHandler.runCatching { cleanup() }.exceptionHandler("eventHandler.cleanup")
+        audioManager.runCatching { cleanup() }.exceptionHandler("audioManager.cleanup")
+
+        _status.value = ConversationStatus.DISCONNECTED
+        conversationId = null
+
+        scope.cancel()
     }
 
     override fun sendUserMessage(message: String) {
