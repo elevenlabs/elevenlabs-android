@@ -113,6 +113,9 @@ class ConversationViewModel(application: Application) : AndroidViewModel(applica
                     onUserTranscript = { transcript ->
                         Log.d("ConversationViewModel", "onUserTranscript: $transcript")
                     },
+                    onAudioAlignment = { alignment ->
+                        Log.d("ConversationViewModel", "onAudioAlignment: $alignment")
+                    },
                     onAgentResponse = { response ->
                         Log.d("ConversationViewModel", "onAgentResponse: $response")
                     },
@@ -129,7 +132,7 @@ class ConversationViewModel(application: Application) : AndroidViewModel(applica
                         Log.d("ConversationViewModel", "onInterruption: eventId=$eventId")
                     }
                 )
-
+                
                 val session = ConversationClient.startSession(config, activityContext)
 
                 currentSession = session

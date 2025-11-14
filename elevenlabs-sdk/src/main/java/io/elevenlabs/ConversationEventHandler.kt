@@ -21,6 +21,7 @@ class ConversationEventHandler(
     private val onCanSendFeedbackChange: ((Boolean) -> Unit)? = null,
     private val onUnhandledClientToolCall: ((ConversationEvent.ClientToolCall) -> Unit)? = null,
     private val onVadScore: ((Float) -> Unit)? = null,
+    private val onAudioAlignment: ((Map<String, Any>) -> Unit)? = null,
     private val onUserTranscript: ((String) -> Unit)? = null,
     private val onAgentResponse: ((String) -> Unit)? = null,
     private val onAgentResponseCorrection: ((String, String) -> Unit)? = null,
@@ -51,9 +52,13 @@ class ConversationEventHandler(
         try {
             when (event) {
                 is ConversationEvent.AgentResponse -> handleAgentResponse(event)
+                is ConversationEvent.AgentChatResponsePart -> handleAgentChatResponsePart(event)
                 is ConversationEvent.UserTranscript -> handleUserTranscript(event)
+                is ConversationEvent.TentativeUserTranscript -> handleTentativeUserTranscript(event)
+                is ConversationEvent.TentativeAgentResponse -> handleTentativeAgentResponse(event)
                 is ConversationEvent.ClientToolCall -> handleClientToolCall(event)
                 is ConversationEvent.VadScore -> handleVadScore(event)
+                is ConversationEvent.AudioAlignment -> handleAudioAlignment(event)
                 is ConversationEvent.Ping -> handlePing(event)
                 is ConversationEvent.AgentResponseCorrection -> handleAgentResponseCorrection(event)
                 is ConversationEvent.AgentToolResponse -> handleAgentToolResponse(event)
@@ -66,6 +71,49 @@ class ConversationEventHandler(
             Log.d("ConvEventHandler", "Error handling conversation event: ${e.message}")
             // Continue processing other events even if one fails
         }
+    }
+
+    /**
+     * Handle streaming agent chat response parts
+     */
+    private suspend fun handleAgentChatResponsePart(event: ConversationEvent.AgentChatResponsePart) {
+        when (event.partType) {
+            "start" -> {
+                _conversationMode.value = ConversationMode.SPEAKING
+                if (!audioManager.isPlaying()) {
+                    try { audioManager.startPlayback() } catch (_: Throwable) {}
+                }
+            }
+            "delta" -> {
+                if (event.text.isNotEmpty()) {
+                    try { onAgentResponse?.invoke(event.text) } catch (_: Throwable) {}
+                }
+            }
+            "stop" -> {
+                _conversationMode.value = ConversationMode.LISTENING
+            }
+        }
+    }
+
+    /**
+     * Handle tentative user transcripts (partial recognition)
+     */
+    private suspend fun handleTentativeUserTranscript(event: ConversationEvent.TentativeUserTranscript) {
+        try { onUserTranscript?.invoke(event.userTranscript) } catch (_: Throwable) {}
+    }
+
+    /**
+     * Handle tentative agent responses (partial)
+     */
+    private fun handleTentativeAgentResponse(event: ConversationEvent.TentativeAgentResponse) {
+        try { onAgentResponse?.invoke(event.tentativeAgentResponse) } catch (_: Throwable) {}
+    }
+
+    /**
+     * Handle audio alignment events
+     */
+    private fun handleAudioAlignment(event: ConversationEvent.AudioAlignment) {
+        try { onAudioAlignment?.invoke(event.alignment) } catch (_: Throwable) {}
     }
 
     /**

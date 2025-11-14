@@ -46,6 +46,7 @@ data class ConversationConfig(
     val onCanSendFeedbackChange: ((canSend: Boolean) -> Unit)? = null,
     val onUnhandledClientToolCall: ((ClientToolCall) -> Unit)? = null,
     val onVadScore: ((score: Float) -> Unit)? = null,
+    val onAudioAlignment: ((alignment: Map<String, Any>) -> Unit)? = null,
     val onUserTranscript: ((userTranscript: String) -> Unit)? = null,
     val onAgentResponse: ((agentResponse: String) -> Unit)? = null,
     val onAgentResponseCorrection: ((originalResponse: String, correctedResponse: String) -> Unit)? = null,

@@ -6,6 +6,7 @@ import io.elevenlabs.models.ConversationMode
 import io.elevenlabs.models.ConversationStatus
 import com.google.gson.*
 import com.google.gson.annotations.SerializedName
+import com.google.gson.reflect.TypeToken
 
 /**
  * JSON event processing for real-time conversation protocol
@@ -37,10 +38,14 @@ object ConversationEventParser {
                 "agent_response" -> parseAgentResponse(jsonObject)
                 "agent_response_correction" -> parseAgentResponseCorrection(jsonObject)
                 "user_transcript" -> parseUserTranscript(jsonObject)
+                "tentative_user_transcript" -> parseTentativeUserTranscript(jsonObject)
+                "agent_chat_response_part" -> parseAgentChatResponsePart(jsonObject)
+                "internal_tentative_agent_response" -> parseTentativeAgentResponse(jsonObject)
                 "client_tool_call" -> parseClientToolCall(jsonObject)
                 "agent_tool_response" -> parseAgentToolResponse(jsonObject)
                 "vad_score" -> parseVadScore(jsonObject)
                 "interruption" -> parseInterruption(jsonObject)
+                "audio_alignment" -> parseAudioAlignment(jsonObject)
                 "ping" -> parsePing(jsonObject)
                 else -> {
                     handleParsingError(json, IllegalArgumentException("Unknown event type: $eventType"))
@@ -151,12 +156,28 @@ object ConversationEventParser {
         )
     }
 
-    private fun parseAudio(jsonObject: JsonObject): ConversationEvent.Audio {
+    private fun parseAudio(jsonObject: JsonObject): ConversationEvent {
         val obj = jsonObject.getAsJsonObject("audio_event") ?: jsonObject
-        return ConversationEvent.Audio(
-            eventId = obj.get("event_id")?.asInt ?: 0,
-            audioBase64 = obj.get("audio_base64")?.asString ?: ""
-        )
+        val hasAlignment = obj.has("alignment") && !obj.get("alignment").isJsonNull
+        val hasB64 = obj.has("audio_base64") || obj.has("audio_base_64")
+
+        return if (hasAlignment && !hasB64) {
+            // Treat as alignment-only payload forwarded on 'audio' type
+            val mapType = object : com.google.gson.reflect.TypeToken<Map<String, Any>>() {}.type
+            val alignmentMap: Map<String, Any> = gson.fromJson(obj, mapType)
+            ConversationEvent.AudioAlignment(alignment = alignmentMap)
+        } else {
+            val b64 = when {
+                obj.has("audio_base64") -> obj.get("audio_base64")?.asString ?: ""
+                obj.has("audio_base_64") -> obj.get("audio_base_64")?.asString ?: ""
+                else -> ""
+            }
+            val eventId = obj.get("event_id")?.asInt ?: 0
+            ConversationEvent.Audio(
+                eventId = eventId,
+                audioBase64 = b64
+            )
+        }
     }
 
     private fun parseConversationInitiationMetadata(jsonObject: JsonObject): ConversationEvent.ConversationInitiationMetadata {
@@ -191,6 +212,73 @@ object ConversationEventParser {
         val obj = jsonObject.getAsJsonObject("interruption_event")
         val id = obj?.get("event_id")?.asInt ?: 0
         return ConversationEvent.Interruption(eventId = id)
+    }
+
+    /**
+     * Parse explicit audio alignment events.
+     *
+     * Matches payload:
+     * {
+     *   "type": "audio_alignment",
+     *   "audio_alignment_event": {
+     *     "event_id": 19,
+     *     "alignment": {
+     *       "chars": ["I", "'", " ", "d", ...],
+     *       "char_start_times_ms": [0.0, 104.0, ...],
+     *       "char_durations_ms": [104.0, 82.0, ...]
+     *     }
+     *   }
+     * }
+     *
+     * If the nested object is not present, falls back to the whole object (minus type).
+     * The alignment is exposed as a Map<String, Any> to remain flexible.
+     */
+    private fun parseAudioAlignment(jsonObject: JsonObject): ConversationEvent.AudioAlignment {
+        val content = jsonObject.getAsJsonObject("audio_alignment_event") ?: jsonObject.deepCopy().apply { remove("type") }
+        val mapType = object : TypeToken<Map<String, Any>>() {}.type
+        val alignmentMap: Map<String, Any> = gson.fromJson(content, mapType)
+        return ConversationEvent.AudioAlignment(alignment = alignmentMap)
+    }
+
+    /**
+     * Parse streaming agent chat response part
+     * Matches payloads like:
+     * {"text_response_part":{"text":"","type":"start"},"type":"agent_chat_response_part"}
+     * {"text_response_part":{"text":"Hello","type":"delta"},"type":"agent_chat_response_part"}
+     * {"text_response_part":{"text":"","type":"stop"},"type":"agent_chat_response_part"}
+     */
+    private fun parseAgentChatResponsePart(jsonObject: JsonObject): ConversationEvent.AgentChatResponsePart {
+        val obj = jsonObject.getAsJsonObject("text_response_part") ?: JsonObject()
+        val text = obj.get("text")?.asString ?: ""
+        val type = obj.get("type")?.asString ?: ""
+        return ConversationEvent.AgentChatResponsePart(
+            partType = type,
+            text = text
+        )
+    }
+
+    /**
+     * Parse tentative agent response (internal)
+     * {"tentative_agent_response_internal_event":{"tentative_agent_response":"..."}, "type":"internal_tentative_agent_response"}
+     */
+    private fun parseTentativeAgentResponse(jsonObject: JsonObject): ConversationEvent.TentativeAgentResponse {
+        val obj = jsonObject.getAsJsonObject("tentative_agent_response_internal_event") ?: JsonObject()
+        val text = obj.get("tentative_agent_response")?.asString ?: ""
+        return ConversationEvent.TentativeAgentResponse(tentativeAgentResponse = text)
+    }
+
+    /**
+     * Parse tentative user transcript
+     * {"tentative_user_transcription_event":{"user_transcript":"...", "event_id":15}, "type":"tentative_user_transcript"}
+     */
+    private fun parseTentativeUserTranscript(jsonObject: JsonObject): ConversationEvent.TentativeUserTranscript {
+        val obj = jsonObject.getAsJsonObject("tentative_user_transcription_event") ?: JsonObject()
+        val text = obj.get("user_transcript")?.asString ?: ""
+        val eventId = obj.get("event_id")?.let { if (it.isJsonNull) null else it.asInt }
+        return ConversationEvent.TentativeUserTranscript(
+            userTranscript = text,
+            eventId = eventId
+        )
     }
 
     /**
