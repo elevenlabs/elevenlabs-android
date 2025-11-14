@@ -90,7 +90,6 @@ class ConversationEventHandler(
                 }
             }
             "stop" -> {
-                // Switch back to listening; feedback enabled by separate final event
                 _conversationMode.value = ConversationMode.LISTENING
             }
         }
