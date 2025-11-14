@@ -9,6 +9,37 @@ package io.elevenlabs.models
 sealed class ConversationEvent {
 
     /**
+     * Audio alignment data event (structure can vary; exposed as a map)
+     */
+    data class AudioAlignment(
+        val alignment: Map<String, Any>
+    ) : ConversationEvent()
+
+    /**
+     * Streaming agent chat response parts
+     * type lifecycle: start -> delta... -> stop
+     */
+    data class AgentChatResponsePart(
+        val partType: String, // "start" | "delta" | "stop"
+        val text: String
+    ) : ConversationEvent()
+
+    /**
+     * Tentative (partial) user transcript sent during recognition
+     */
+    data class TentativeUserTranscript(
+        val userTranscript: String,
+        val eventId: Int?
+    ) : ConversationEvent()
+
+    /**
+     * Tentative (partial) agent response text
+     */
+    data class TentativeAgentResponse(
+        val tentativeAgentResponse: String
+    ) : ConversationEvent()
+
+    /**
      * Event representing the metadata for the conversation
      *
      * @param conversationId The unique identifier for the conversation

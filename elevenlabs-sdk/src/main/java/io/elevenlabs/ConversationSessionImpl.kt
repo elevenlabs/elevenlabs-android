@@ -49,6 +49,9 @@ internal class ConversationSessionImpl(
         onVadScore = { score ->
             try { config.onVadScore?.invoke(score) } catch (_: Throwable) {}
         },
+        onAudioAlignment = { alignment ->
+            try { config.onAudioAlignment?.invoke(alignment) } catch (_: Throwable) {}
+        },
         onUserTranscript = { transcript ->
             try { config.onUserTranscript?.invoke(transcript) } catch (_: Throwable) {}
         },
