@@ -215,10 +215,23 @@ object ConversationEventParser {
     }
 
     /**
-     * Parse audio alignment event
-     * Matches payload like:
-     * {"audio_alignment_event": { ... arbitrary fields ... }, "type":"audio_alignment"}
-     * If nested object not present, fallback to whole object minus type.
+     * Parse explicit audio alignment events.
+     *
+     * Matches payload:
+     * {
+     *   "type": "audio_alignment",
+     *   "audio_alignment_event": {
+     *     "event_id": 19,
+     *     "alignment": {
+     *       "chars": ["I", "'", " ", "d", ...],
+     *       "char_start_times_ms": [0.0, 104.0, ...],
+     *       "char_durations_ms": [104.0, 82.0, ...]
+     *     }
+     *   }
+     * }
+     *
+     * If the nested object is not present, falls back to the whole object (minus type).
+     * The alignment is exposed as a Map<String, Any> to remain flexible.
      */
     private fun parseAudioAlignment(jsonObject: JsonObject): ConversationEvent.AudioAlignment {
         val content = jsonObject.getAsJsonObject("audio_alignment_event") ?: jsonObject.deepCopy().apply { remove("type") }
