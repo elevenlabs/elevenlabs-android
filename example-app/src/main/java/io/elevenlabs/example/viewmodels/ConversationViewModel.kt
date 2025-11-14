@@ -65,7 +65,7 @@ class ConversationViewModel(application: Application) : AndroidViewModel(applica
         viewModelScope.launch {
             try {
                 val config = io.elevenlabs.ConversationConfig(
-                    agentId = "agent_4601k9whz2vje4b9s74jqatragqc", // Replace with your agent ID
+                    agentId = "agent_6801k31zkgmkfv9tm4css01pd9qq", // Replace with your agent ID
                     conversationToken = null,
                     userId = "demo-user",
                     textOnly = false,
@@ -132,9 +132,7 @@ class ConversationViewModel(application: Application) : AndroidViewModel(applica
                         Log.d("ConversationViewModel", "onInterruption: eventId=$eventId")
                     }
                 )
-
-                Log.d("ConversationViewModel", "Using agentId=agent_4601k9whz2vje4b9s74jqatragqc api=${config.apiEndpoint} ws=${config.websocketUrl}")
-
+                
                 val session = ConversationClient.startSession(config, activityContext)
 
                 currentSession = session
