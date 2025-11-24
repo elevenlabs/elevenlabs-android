@@ -110,6 +110,11 @@ class ConversationViewModel(application: Application) : AndroidViewModel(applica
                         // Log commented out as it's quite noisy
                         // Log.d("ConversationViewModel", "onVadScore: $score")
                     },
+                    onAudioLevelChanged = { level ->
+                        // Agent audio level (volume)
+                        // Commented out as it's quite noisy
+                        // Log.d("ConversationViewModel", "audioLevel: $level")
+                    },
                     onUserTranscript = { transcript ->
                         Log.d("ConversationViewModel", "onUserTranscript: $transcript")
                     },
@@ -132,7 +137,7 @@ class ConversationViewModel(application: Application) : AndroidViewModel(applica
                         Log.d("ConversationViewModel", "onInterruption: eventId=$eventId")
                     }
                 )
-                
+
                 val session = ConversationClient.startSession(config, activityContext)
 
                 currentSession = session
@@ -161,6 +166,13 @@ class ConversationViewModel(application: Application) : AndroidViewModel(applica
                         _isMuted.postValue(muted)
                     }
                 }
+
+                // Collect audio level flow (commented out as it's quite noisy)
+                // viewModelScope.launch {
+                //     session.audioLevel.collect { level ->
+                //         Log.d("ConversationViewModel", "audioLevel: $level")
+                //     }
+                // }
 
                 Log.d("ConversationViewModel", "Session created and started successfully")
 

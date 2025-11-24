@@ -198,6 +198,7 @@ class MainActivity : AppCompatActivity() {
         viewModel.canSendFeedback.observe(this) { canSend ->
             updateFeedbackUI(canSend)
         }
+
     }
 
     private fun updateUIForState(state: UiState) {

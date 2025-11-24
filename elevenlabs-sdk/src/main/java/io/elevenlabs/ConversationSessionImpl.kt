@@ -87,6 +87,12 @@ internal class ConversationSessionImpl(
         } else {
             MutableStateFlow(false)
         }
+    override val audioLevel: StateFlow<Float> =
+        if (connection is io.elevenlabs.network.WebRTCConnection) {
+            connection.audioLevel
+        } else {
+            MutableStateFlow(0.0f)
+        }
 
     override suspend fun start() {
         try {

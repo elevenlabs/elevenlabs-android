@@ -35,6 +35,12 @@ interface ConversationSession {
      */
     val isMuted: StateFlow<Boolean>
 
+    /**
+     * Current audio level from the agent (0.0 to 1.0)
+     * Useful for animating UI elements based on agent voice volume
+     */
+    val audioLevel: StateFlow<Float>
+
     // Session Control Methods
 
     /**
