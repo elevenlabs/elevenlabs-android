@@ -10,6 +10,7 @@ Official ElevenLabs Conversational SDK for Android.
 - Data channel messaging (user message, contextual update, user activity/typing)
 - Feedback (like/dislike) associated with agent responses
 - Microphone mute/unmute control
+- Real-time audio level tracking for agent voice volume (0.0 to 1.0)
 
 ---
 
@@ -115,6 +116,10 @@ val config = ConversationConfig(
     },
     onVadScore = { score ->
         // Voice Activity Detection score, range from 0 to 1 where higher values indicate higher confidence of speech
+    },
+    onAudioLevelChanged = { level ->
+        // Agent audio level (volume), range from 0.0 to 1.0
+        // Log.d("MyApp", "Agent audio level: $level")
     },
     onUserTranscript = { transcript ->
         // User's speech transcribed to text
@@ -230,6 +235,7 @@ Both parameters are optional and default to the standard ElevenLabs production e
 ### Audio & Metadata Callbacks
 
 - **onVadScore(score: Float)**: Voice Activity Detection score. Ranges from 0 to 1 where higher values indicate confidence of speech.
+- **onAudioLevelChanged(level: Float)**: Agent audio level (volume) in real-time. Ranges from 0.0 (silent) to 1.0 (loudest). Typically shows small variations during speech.
 - **onConversationInitiationMetadata(conversationId: String, agentOutputFormat: String, userInputFormat: String)**: Conversation metadata including audio format details.
 
 ---
@@ -289,11 +295,12 @@ Observe `session.isMuted` to update the UI label between "Mute" and "Unmute".
 
 ## Observing Session State
 
-The SDK uses **Kotlin StateFlow** for reactive state management. The `ConversationSession` exposes three StateFlow properties:
+The SDK uses **Kotlin StateFlow** for reactive state management. The `ConversationSession` exposes four StateFlow properties:
 
 - `status: StateFlow<ConversationStatus>` - Connection status (CONNECTED, CONNECTING, DISCONNECTED, etc.)
 - `mode: StateFlow<ConversationMode>` - Conversation mode (SPEAKING, LISTENING)
 - `isMuted: StateFlow<Boolean>` - Microphone mute state
+- `audioLevel: StateFlow<Float>` - Agent audio level (0.0 to 1.0)
 
 ### In a ViewModel (Recommended)
 
@@ -326,6 +333,13 @@ class MyViewModel : ViewModel() {
                 }
             }
         }
+
+        viewModelScope.launch {
+            session.audioLevel.collect { level ->
+                // Agent audio level updates during speech
+                Log.d("MyViewModel", "Audio level: $level")
+            }
+        }
     }
 }
 ```
@@ -353,6 +367,12 @@ class MyActivity : AppCompatActivity() {
                         muteButton.text = if (muted) "Unmute" else "Mute"
                     }
                 }
+                launch {
+                    session.audioLevel.collect { level ->
+                        // Agent audio level updates
+                        Log.d("MyActivity", "Audio level: $level")
+                    }
+                }
             }
         }
     }
@@ -368,9 +388,15 @@ import io.elevenlabs.utils.asLiveData
 
 val statusLiveData: LiveData<ConversationStatus> = session.status.asLiveData()
 val modeLiveData: LiveData<ConversationMode> = session.mode.asLiveData()
+val audioLevelLiveData: LiveData<Float> = session.audioLevel.asLiveData()
 
 statusLiveData.observe(this) { status ->
     // Handle status changes
+}
+
+audioLevelLiveData.observe(this) { level ->
+    // Handle audio level changes
+    Log.d("MyActivity", "Audio level: $level")
 }
 ```
 

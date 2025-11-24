@@ -42,11 +42,15 @@ class WebRTCConnection(
     override val connectionState: ConnectionState
         get() = _connectionState.value
 
+    private val _audioLevel = MutableStateFlow(0.0f)
+    val audioLevel: StateFlow<Float> = _audioLevel
+
     private var messageListener: ((String) -> Unit)? = null
     private var connectionStateListener: ((ConnectionState) -> Unit)? = null
 
     private val messageChannel = Channel<String>(Channel.UNLIMITED)
     private var messageJob: Job? = null
+    private var audioLevelJob: Job? = null
 
     /**
      * Connect to LiveKit room using the provided token and server URL
@@ -91,6 +95,10 @@ class WebRTCConnection(
             messageJob?.cancel()
             messageJob = null
 
+            // Stop audio level monitoring
+            audioLevelJob?.cancel()
+            audioLevelJob = null
+
             // Stop event handling
             eventHandlerJob?.cancel()
             eventHandlerJob = null
@@ -98,6 +106,9 @@ class WebRTCConnection(
             // Disconnect from room
             room.disconnect()
             localParticipant = null
+
+            // Reset audio level to 0
+            _audioLevel.value = 0.0f
 
             // Reset to IDLE state to allow reconnection
             updateConnectionState(ConnectionState.IDLE)
@@ -165,6 +176,9 @@ class WebRTCConnection(
                         Log.d("WebRTCConnection", "Connected. roomSid=${room.sid}, name=${room.name}")
                         // Mark connection as connected now that LK confirms
                         updateConnectionState(ConnectionState.CONNECTED)
+
+                        // Start monitoring audio levels from remote participants
+                        startAudioLevelMonitoring()
 
                         // Send initiation overrides payload after actual connection
                         try {
@@ -300,6 +314,46 @@ class WebRTCConnection(
             }
         } catch (e: Exception) {
             Log.d("WebRTCConnection", "Failed to process received data: ${e.message}")
+        }
+    }
+
+    /**
+     * Start monitoring audio levels from remote participants (agent)
+     */
+    private fun startAudioLevelMonitoring() {
+        // Cancel any existing monitoring
+        audioLevelJob?.cancel()
+
+        audioLevelJob = scope.launch {
+            while (isActive) {
+                try {
+                    // Get the first remote participant (the agent)
+                    val remoteParticipant = room.remoteParticipants.values.firstOrNull()
+
+                    if (remoteParticipant != null) {
+                        // Get audio level from the remote participant (0.0 to 1.0)
+                        val level = remoteParticipant.audioLevel
+
+                        // Update StateFlow
+                        _audioLevel.value = level
+
+                        // Invoke callback if provided
+                        try {
+                            latestConfig?.onAudioLevelChanged?.invoke(level)
+                        } catch (t: Throwable) {
+                            Log.d("WebRTCConnection", "onAudioLevelChanged callback threw: ${t.message}")
+                        }
+                    } else {
+                        // No remote participant, reset to 0
+                        _audioLevel.value = 0.0f
+                    }
+                } catch (e: Exception) {
+                    Log.d("WebRTCConnection", "Error reading audio level: ${e.message}")
+                }
+
+                // Update every 50ms for smooth animation (20 FPS)
+                delay(50)
+            }
         }
     }
 
