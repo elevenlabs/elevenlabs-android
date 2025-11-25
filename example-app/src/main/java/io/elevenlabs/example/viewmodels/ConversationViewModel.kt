@@ -124,6 +124,9 @@ class ConversationViewModel(application: Application) : AndroidViewModel(applica
                     onAgentResponse = { response ->
                         Log.d("ConversationViewModel", "onAgentResponse: $response")
                     },
+                    onAgentResponseMetadata = { metadata ->
+                        Log.d("ConversationViewModel", "onAgentResponseMetadata: $metadata")
+                    },
                     onAgentResponseCorrection = { originalResponse, correctedResponse ->
                         Log.d("ConversationViewModel", "onAgentResponseCorrection: original='$originalResponse', corrected='$correctedResponse'")
                     },

@@ -22,6 +22,7 @@ class ConversationEventHandler(
     private val onUnhandledClientToolCall: ((ConversationEvent.ClientToolCall) -> Unit)? = null,
     private val onVadScore: ((Float) -> Unit)? = null,
     private val onAudioAlignment: ((Map<String, Any>) -> Unit)? = null,
+    private val onAgentResponseMetadata: ((Map<String, Any>) -> Unit)? = null,
     private val onUserTranscript: ((String) -> Unit)? = null,
     private val onAgentResponse: ((String) -> Unit)? = null,
     private val onAgentResponseCorrection: ((String, String) -> Unit)? = null,
@@ -59,6 +60,7 @@ class ConversationEventHandler(
                 is ConversationEvent.ClientToolCall -> handleClientToolCall(event)
                 is ConversationEvent.VadScore -> handleVadScore(event)
                 is ConversationEvent.AudioAlignment -> handleAudioAlignment(event)
+                is ConversationEvent.AgentResponseMetadata -> handleAgentResponseMetadata(event)
                 is ConversationEvent.Ping -> handlePing(event)
                 is ConversationEvent.AgentResponseCorrection -> handleAgentResponseCorrection(event)
                 is ConversationEvent.AgentToolResponse -> handleAgentToolResponse(event)
@@ -114,6 +116,13 @@ class ConversationEventHandler(
      */
     private fun handleAudioAlignment(event: ConversationEvent.AudioAlignment) {
         try { onAudioAlignment?.invoke(event.alignment) } catch (_: Throwable) {}
+    }
+
+    /**
+     * Handle agent response metadata events
+     */
+    private fun handleAgentResponseMetadata(event: ConversationEvent.AgentResponseMetadata) {
+        try { onAgentResponseMetadata?.invoke(event.metadata) } catch (_: Throwable) {}
     }
 
     /**

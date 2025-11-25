@@ -41,6 +41,7 @@ object ConversationEventParser {
                 "tentative_user_transcript" -> parseTentativeUserTranscript(jsonObject)
                 "agent_chat_response_part" -> parseAgentChatResponsePart(jsonObject)
                 "internal_tentative_agent_response" -> parseTentativeAgentResponse(jsonObject)
+                "agent_response_metadata" -> parseAgentResponseMetadata(jsonObject)
                 "client_tool_call" -> parseClientToolCall(jsonObject)
                 "agent_tool_response" -> parseAgentToolResponse(jsonObject)
                 "vad_score" -> parseVadScore(jsonObject)
@@ -238,6 +239,18 @@ object ConversationEventParser {
         val mapType = object : TypeToken<Map<String, Any>>() {}.type
         val alignmentMap: Map<String, Any> = gson.fromJson(content, mapType)
         return ConversationEvent.AudioAlignment(alignment = alignmentMap)
+    }
+
+    /**
+     * Parse agent response metadata event.
+     * Supports nested 'agent_response_metadata_event' or flat object with 'type' removed.
+     */
+    private fun parseAgentResponseMetadata(jsonObject: JsonObject): ConversationEvent.AgentResponseMetadata {
+        val content = jsonObject.getAsJsonObject("agent_response_metadata_event")
+            ?: jsonObject.deepCopy().apply { remove("type") }
+        val mapType = object : com.google.gson.reflect.TypeToken<Map<String, Any>>() {}.type
+        val meta: Map<String, Any> = gson.fromJson(content, mapType)
+        return ConversationEvent.AgentResponseMetadata(metadata = meta)
     }
 
     /**

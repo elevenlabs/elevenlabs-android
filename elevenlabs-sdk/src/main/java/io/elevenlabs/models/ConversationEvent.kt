@@ -16,6 +16,14 @@ sealed class ConversationEvent {
     ) : ConversationEvent()
 
     /**
+     * Agent response metadata (e.g., additional timing/semantic info)
+     * Structure varies; exposed as a map for flexibility.
+     */
+    data class AgentResponseMetadata(
+        val metadata: Map<String, Any>
+    ) : ConversationEvent()
+
+    /**
      * Streaming agent chat response parts
      * type lifecycle: start -> delta... -> stop
      */

@@ -52,6 +52,9 @@ internal class ConversationSessionImpl(
         onAudioAlignment = { alignment ->
             try { config.onAudioAlignment?.invoke(alignment) } catch (_: Throwable) {}
         },
+        onAgentResponseMetadata = { metadata ->
+            try { config.onAgentResponseMetadata?.invoke(metadata) } catch (_: Throwable) {}
+        },
         onUserTranscript = { transcript ->
             try { config.onUserTranscript?.invoke(transcript) } catch (_: Throwable) {}
         },
