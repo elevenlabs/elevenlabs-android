@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "io.elevenlabs"
-version = "0.5.3"
+version = "0.5.4"
 
 android {
 namespace = "io.elevenlabs"
