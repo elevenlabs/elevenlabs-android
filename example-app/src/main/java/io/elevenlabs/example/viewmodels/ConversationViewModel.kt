@@ -87,6 +87,9 @@ class ConversationViewModel(application: Application) : AndroidViewModel(applica
                     onConnect = { conversationId ->
                         Log.d("ConversationViewModel", "Connected id=$conversationId")
                     },
+                    onDisconnect = { reason ->
+                        Log.d("ConversationViewModel", "onDisconnect: $reason")
+                    },
                     onMessage = { source, message ->
                         // Receive messages from the server. Can be quite noisy hence commented out
                         // Log.d("ConversationViewModel", "onMessage [$source]: $message")

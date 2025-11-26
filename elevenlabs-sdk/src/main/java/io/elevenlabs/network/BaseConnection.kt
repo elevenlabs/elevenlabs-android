@@ -1,6 +1,7 @@
 package io.elevenlabs.network
 
 import io.elevenlabs.ConversationConfig
+import io.elevenlabs.models.DisconnectionDetails
 
 /**
  * Abstract base class for network connections
@@ -22,8 +23,11 @@ abstract class BaseConnection {
 
     /**
      * Disconnect from the server and clean up resources
+     *
+     * @param details Optional details about why the disconnection occurred.
+     *                Defaults to user-initiated disconnect if not specified.
      */
-    abstract fun disconnect()
+    abstract fun disconnect(details: DisconnectionDetails? = null)
 
     /**
      * Send a message through the connection
