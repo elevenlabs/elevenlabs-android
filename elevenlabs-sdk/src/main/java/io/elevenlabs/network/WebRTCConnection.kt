@@ -86,7 +86,7 @@ class WebRTCConnection(
             startMessageProcessing()
 
         } catch (e: Exception) {
-            invokeOnDisconnect(DisconnectionDetails.Error(e.message ?: "Failed to connect"))
+            invokeOnDisconnect(DisconnectionDetails.Error(e))
             updateConnectionState(ConnectionState.ERROR)
             throw RuntimeException("Failed to connect to LiveKit room", e)
         }
@@ -129,7 +129,7 @@ class WebRTCConnection(
 
         } catch (e: Exception) {
             Log.d("WebRTCConnection", "Error during disconnect: ${e.message}")
-            invokeOnDisconnect(DisconnectionDetails.Error(e.message ?: "Unknown error during disconnect"))
+            invokeOnDisconnect(DisconnectionDetails.Error(e))
             updateConnectionState(ConnectionState.ERROR)
         }
     }

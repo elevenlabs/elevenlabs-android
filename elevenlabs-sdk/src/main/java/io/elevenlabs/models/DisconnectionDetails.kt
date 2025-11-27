@@ -13,7 +13,7 @@ sealed class DisconnectionDetails {
      * Disconnection due to an error
      * @param message Description of the error that occurred
      */
-    data class Error(val message: String) : DisconnectionDetails()
+    data class Error(val exception: Exception) : DisconnectionDetails()
 
     /**
      * Disconnection initiated by the agent
