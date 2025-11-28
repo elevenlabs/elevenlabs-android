@@ -5,6 +5,7 @@ import android.util.Log
 import io.elevenlabs.ConversationConfig
 import io.elevenlabs.models.ConversationMode
 import io.elevenlabs.models.ConversationStatus
+import io.elevenlabs.models.DisconnectionDetails
 import io.elevenlabs.models.toConversationStatus
 import io.livekit.android.room.Room
 import io.livekit.android.room.participant.LocalParticipant
@@ -37,6 +38,10 @@ class WebRTCConnection(
 
     private var localParticipant: LocalParticipant? = null
     private var latestConfig: ConversationConfig? = null
+
+    /** Flag to ensure onDisconnect is only called once per session */
+    @Volatile
+    private var disconnectCallbackInvoked = false
 
     private var _connectionState = MutableStateFlow(ConnectionState.IDLE)
     override val connectionState: ConnectionState
@@ -81,6 +86,7 @@ class WebRTCConnection(
             startMessageProcessing()
 
         } catch (e: Exception) {
+            invokeOnDisconnect(DisconnectionDetails.Error(e))
             updateConnectionState(ConnectionState.ERROR)
             throw RuntimeException("Failed to connect to LiveKit room", e)
         }
@@ -88,8 +94,11 @@ class WebRTCConnection(
 
     /**
      * Disconnect from the room and clean up resources
+     * @param details Optional disconnection details. If null, defaults to User-initiated disconnect.
      */
-    override fun disconnect() {
+    override fun disconnect(details: DisconnectionDetails?) {
+        var disconnectDetails = details ?: DisconnectionDetails.User
+
         try {
             // Stop message processing first
             messageJob?.cancel()
@@ -110,13 +119,20 @@ class WebRTCConnection(
             // Reset audio level to 0
             _audioLevel.value = 0.0f
 
+            // Reset disconnect callback flag to allow reconnection
+            disconnectCallbackInvoked = false
+
             // Reset to IDLE state to allow reconnection
             updateConnectionState(ConnectionState.IDLE)
             Log.d("WebRTCConnection", "Disconnected and reset to IDLE state")
 
         } catch (e: Exception) {
             Log.d("WebRTCConnection", "Error during disconnect: ${e.message}")
+            disconnectDetails = DisconnectionDetails.Error(e)
             updateConnectionState(ConnectionState.ERROR)
+        } finally {
+            // Invoke onDisconnect callback once after all cleanup is complete
+            invokeOnDisconnect(disconnectDetails)
         }
     }
 
@@ -220,11 +236,6 @@ class WebRTCConnection(
                         updateConnectionState(ConnectionState.CONNECTED)
                     }
 
-                    is RoomEvent.ParticipantConnected -> {
-                        Log.d("WebRTCConnection", "Participant connected: ${event.participant.sid}")
-                        handleParticipantConnected(event.participant)
-                    }
-
                     is RoomEvent.ParticipantDisconnected -> {
                         Log.d("WebRTCConnection", "Participant disconnected: ${event.participant.sid}")
                         handleParticipantDisconnected(event.participant)
@@ -240,7 +251,7 @@ class WebRTCConnection(
                     }
 
                     else -> {
-                        // Log.d("WebRTCConnection", "Unhandled event: ${event.javaClass.simpleName}")
+                        Log.d("WebRTCConnection", "Unhandled event: ${event.javaClass.simpleName}")
                     }
                 }
             }
@@ -259,19 +270,15 @@ class WebRTCConnection(
     }
 
     /**
-     * Handle participant connected event
-     */
-    private fun handleParticipantConnected(participant: RemoteParticipant) {
-        Log.d("WebRTCConnection", "Participant connected: ${participant.sid}")
-        // Set up participant-specific handling if needed
-    }
-
-    /**
      * Handle participant disconnected event
      */
     private fun handleParticipantDisconnected(participant: RemoteParticipant) {
-        Log.d("WebRTCConnection", "Participant disconnected: ${participant.sid}")
-        // Clean up participant-specific resources if needed
+        val identityStr = participant.identity?.value
+
+        // If the agent disconnects, shut down the connection with agent disconnect reason
+        if (identityStr?.startsWith("agent") == true) {
+            disconnect(DisconnectionDetails.Agent)
+        }
     }
 
     /**
@@ -368,6 +375,21 @@ class WebRTCConnection(
             try {
                 latestConfig?.onStatusChange?.invoke(newState.toConversationStatus())
             } catch (_: Throwable) { }
+        }
+    }
+
+    /**
+     * Invoke onDisconnect callback with the given details.
+     * This method ensures the callback is only invoked once per session.
+     */
+    private fun invokeOnDisconnect(details: DisconnectionDetails) {
+        if (disconnectCallbackInvoked) return
+        disconnectCallbackInvoked = true
+
+        try {
+            latestConfig?.onDisconnect?.invoke(details)
+        } catch (t: Throwable) {
+            Log.d("WebRTCConnection", "onDisconnect callback threw: ${t.message}")
         }
     }
 

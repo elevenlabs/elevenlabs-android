@@ -3,6 +3,7 @@ package io.elevenlabs
 import io.elevenlabs.models.ConversationEvent.ClientToolCall
 import io.elevenlabs.models.ConversationMode
 import io.elevenlabs.models.ConversationStatus
+import io.elevenlabs.models.DisconnectionDetails
 
 /**
  * Configuration class for conversation sessions
@@ -54,7 +55,8 @@ data class ConversationConfig(
     val onAgentResponseCorrection: ((originalResponse: String, correctedResponse: String) -> Unit)? = null,
     val onAgentToolResponse: ((toolName: String, toolCallId: String, toolType: String, isError: Boolean) -> Unit)? = null,
     val onConversationInitiationMetadata: ((conversationId: String, agentOutputFormat: String, userInputFormat: String) -> Unit)? = null,
-    val onInterruption: ((eventId: Int) -> Unit)? = null
+    val onInterruption: ((eventId: Int) -> Unit)? = null,
+    val onDisconnect: ((details: DisconnectionDetails) -> Unit)? = null
 
 ) {
     init {

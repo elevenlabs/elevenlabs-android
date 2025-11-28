@@ -99,6 +99,9 @@ val config = ConversationConfig(
     onConnect = { conversationId ->
         // Connected, you can store conversationId via session.getId() too
     },
+    onDisconnect = { reason ->
+        // Disconnected, reason indicates who initiated the disconnect, either "Agent", "User" or "Error"
+    },
     onMessage = { source, messageJson ->
         // Raw JSON messages from data channel; useful for logging/telemetry
     },
@@ -215,6 +218,10 @@ Both parameters are optional and default to the standard ElevenLabs production e
 ### Core Callbacks
 
 - **onConnect(conversationId: String)**: Fired once connected. Conversation ID can also be read via `session.getId()`.
+- **onDisconnect(reason: DisconnectionDetails)**: Called when the conversation ends. The reason can be:
+  - `DisconnectionDetails.User` - User ended the conversation
+  - `DisconnectionDetails.Agent` - Agent ended the conversation
+  - `DisconnectionDetails.Error(exception: Exception)` - Connection error occurred
 - **onMessage(source: String, message: String)**: Raw JSON messages from data channel. `source` is `"ai"` or `"user"`.
 - **onModeChange(mode: ConversationMode)**: `ConversationMode.SPEAKING` or `ConversationMode.LISTENING`; drive your speaking indicator.
 - **onStatusChange(status: ConversationStatus)**: Enum values: `CONNECTED`, `CONNECTING`, `DISCONNECTED`, `DISCONNECTING`, `ERROR`.
