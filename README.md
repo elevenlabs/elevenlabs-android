@@ -221,7 +221,7 @@ Both parameters are optional and default to the standard ElevenLabs production e
 - **onDisconnect(reason: DisconnectionDetails)**: Called when the conversation ends. The reason can be:
   - `DisconnectionDetails.User` - User ended the conversation
   - `DisconnectionDetails.Agent` - Agent ended the conversation
-  - `DisconnectionDetails.Error(message: String)` - Connection error occurred
+  - `DisconnectionDetails.Error(exception: Exception)` - Connection error occurred
 - **onMessage(source: String, message: String)**: Raw JSON messages from data channel. `source` is `"ai"` or `"user"`.
 - **onModeChange(mode: ConversationMode)**: `ConversationMode.SPEAKING` or `ConversationMode.LISTENING`; drive your speaking indicator.
 - **onStatusChange(status: ConversationStatus)**: Enum values: `CONNECTED`, `CONNECTING`, `DISCONNECTED`, `DISCONNECTING`, `ERROR`.
