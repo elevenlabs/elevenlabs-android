@@ -97,10 +97,9 @@ class WebRTCConnection(
      * @param details Optional disconnection details. If null, defaults to User-initiated disconnect.
      */
     override fun disconnect(details: DisconnectionDetails?) {
-        try {
-            // Invoke onDisconnect callback if not already called
-            invokeOnDisconnect(details ?: DisconnectionDetails.User)
+        var disconnectDetails = details ?: DisconnectionDetails.User
 
+        try {
             // Stop message processing first
             messageJob?.cancel()
             messageJob = null
@@ -129,8 +128,11 @@ class WebRTCConnection(
 
         } catch (e: Exception) {
             Log.d("WebRTCConnection", "Error during disconnect: ${e.message}")
-            invokeOnDisconnect(DisconnectionDetails.Error(e))
+            disconnectDetails = DisconnectionDetails.Error(e)
             updateConnectionState(ConnectionState.ERROR)
+        } finally {
+            // Invoke onDisconnect callback once after all cleanup is complete
+            invokeOnDisconnect(disconnectDetails)
         }
     }
 
