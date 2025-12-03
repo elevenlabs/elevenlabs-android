@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "io.elevenlabs"
-version = "0.6.0"
+version = "0.7.0"
 
 android {
 namespace = "io.elevenlabs"
@@ -41,6 +41,10 @@ namespace = "io.elevenlabs"
 
     buildFeatures {
         buildConfig = true
+    }
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
     }
 }
 

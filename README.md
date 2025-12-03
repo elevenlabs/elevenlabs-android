@@ -265,7 +265,63 @@ val config = ConversationConfig(
 )
 ```
 
-When the agent issues a `client_tool_call`, the SDK executes the matching tool and responds with a `client_tool_result`. If the tool is not registered, `onUnhandledClientToolCall` is invoked and a failure result is returned to the agent (if a response is expected).
+When the agent issues a `client_tool_call`, the SDK executes the matching tool and responds with a `client_tool_result`. If the tool is not registered:
+- If `onUnhandledClientToolCall` callback is provided, it will be invoked and you must handle the response manually using `sendToolResult()`
+- If no callback is provided and the tool expects a response, an automatic failure will be sent to prevent the agent from hanging
+
+### Dynamic Client Tools
+
+For runtime-defined tools or tools that can't be registered upfront, you can handle them dynamically using the `onUnhandledClientToolCall` callback combined with `sendToolResult()`:
+
+```kotlin
+val config = ConversationConfig(
+    agentId = "<public_agent>",
+    onUnhandledClientToolCall = { toolCall ->
+        // Handle dynamic tool execution
+        when (toolCall.toolName) {
+            "getDeviceInfo" -> {
+                val result = mapOf(
+                    "success" to true,
+                    "result" to "Device: ${Build.MODEL}",
+                    "error" to ""
+                )
+                session.sendToolResult(toolCall.toolCallId, result, isError = false)
+            }
+            "fetchUserData" -> {
+                // Perform async operation
+                coroutineScope.launch {
+                    val data = fetchDataFromAPI(toolCall.parameters)
+                    val result = mapOf(
+                        "success" to true,
+                        "result" to data,
+                        "error" to ""
+                    )
+                    session.sendToolResult(toolCall.toolCallId, result, isError = false)
+                }
+            }
+            else -> {
+                // Unknown tool
+                val errorResult = mapOf(
+                    "success" to false,
+                    "result" to "",
+                    "error" to "Unknown tool: ${toolCall.toolName}"
+                )
+                session.sendToolResult(toolCall.toolCallId, errorResult, isError = true)
+            }
+        }
+    }
+)
+```
+
+**Key methods:**
+- `session.sendToolResult(toolCallId, result, isError)`: Send tool execution results back to the agent manually. Use this in the `onUnhandledClientToolCall` callback to respond to dynamic tool calls.
+- `toolCall.expectsResponse`: Check this property to determine if the agent expects a response. If `false`, the tool is fire-and-forget and you can skip calling `sendToolResult()`.
+
+This approach is useful for:
+- Tools that are determined at runtime based on user settings
+- Tools that require complex async operations
+- Integration with external APIs or databases
+- Scenarios where tool availability depends on app state or permissions
 
 ---
 

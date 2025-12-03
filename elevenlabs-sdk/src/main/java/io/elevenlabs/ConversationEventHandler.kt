@@ -223,14 +223,28 @@ class ConversationEventHandler(
             if (!toolExists) {
                 // Notify app layer about unhandled tool call
                 try { onUnhandledClientToolCall?.invoke(event) } catch (_: Throwable) {}
+
+                // If no callback is registered and agent expects a response, send failure to prevent hanging
+                if (onUnhandledClientToolCall == null && event.expectsResponse) {
+                    val failureEvent = OutgoingEvent.ClientToolResult(
+                        toolCallId = event.toolCallId,
+                        result = mapOf<String, Any>(
+                            "success" to false,
+                            "result" to "",
+                            "error" to "Tool '${event.toolName}' not registered and no handler provided"
+                        ),
+                        isError = true
+                    )
+                    messageCallback(failureEvent)
+                    Log.d("ConvEventHandler", "Tool '${event.toolName}' not registered - sent automatic failure response")
+                } else {
+                    Log.d("ConvEventHandler", "Tool '${event.toolName}' not registered - waiting for manual response via sendToolResult()")
+                }
+                return@launch
             }
 
             val result = try {
-                if (!toolExists) {
-                    ClientToolResult.failure("Tool '${event.toolName}' not registered on client")
-                } else {
-                    toolRegistry.executeTool(event.toolName, event.parameters)
-                }
+                toolRegistry.executeTool(event.toolName, event.parameters)
             } catch (e: Exception) {
                 ClientToolResult.failure("Tool execution failed: ${e.message}")
             }
@@ -289,6 +303,23 @@ class ConversationEventHandler(
     fun sendUserMessage(content: String) {
         val event = OutgoingEvent.UserMessage(text = content)
         messageCallback(event)
+    }
+
+    /**
+     * Send the result of a client tool execution back to the agent
+     *
+     * @param toolCallId The unique identifier for the tool call
+     * @param result Map containing the result data
+     * @param isError Whether the tool execution resulted in an error
+     */
+    fun sendToolResult(toolCallId: String, result: Map<String, Any>, isError: Boolean = false) {
+        val toolResultEvent = OutgoingEvent.ClientToolResult(
+            toolCallId = toolCallId,
+            result = result,
+            isError = isError
+        )
+        messageCallback(toolResultEvent)
+        Log.d("ConvEventHandler", "Sent tool result for call ID: $toolCallId (${if (isError) "ERROR" else "SUCCESS"})")
     }
 
     /**
