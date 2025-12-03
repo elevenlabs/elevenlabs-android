@@ -222,9 +222,24 @@ class ConversationEventHandler(
             val toolExists = toolRegistry.isToolRegistered(event.toolName)
             if (!toolExists) {
                 // Notify app layer about unhandled tool call
-                // App should use sendToolResult() to respond manually
                 try { onUnhandledClientToolCall?.invoke(event) } catch (_: Throwable) {}
-                Log.d("ConvEventHandler", "Tool '${event.toolName}' not registered - waiting for manual response via sendToolResult()")
+
+                // If no callback is registered and agent expects a response, send failure to prevent hanging
+                if (onUnhandledClientToolCall == null && event.expectsResponse) {
+                    val failureEvent = OutgoingEvent.ClientToolResult(
+                        toolCallId = event.toolCallId,
+                        result = mapOf<String, Any>(
+                            "success" to false,
+                            "result" to "",
+                            "error" to "Tool '${event.toolName}' not registered and no handler provided"
+                        ),
+                        isError = true
+                    )
+                    messageCallback(failureEvent)
+                    Log.d("ConvEventHandler", "Tool '${event.toolName}' not registered - sent automatic failure response")
+                } else {
+                    Log.d("ConvEventHandler", "Tool '${event.toolName}' not registered - waiting for manual response via sendToolResult()")
+                }
                 return@launch
             }
 
