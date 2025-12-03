@@ -203,6 +203,10 @@ internal class ConversationSessionImpl(
         eventHandler.sendUserActivity()
     }
 
+    override fun sendToolResult(toolCallId: String, result: Map<String, Any>, isError: Boolean) {
+        eventHandler.sendToolResult(toolCallId, result, isError)
+    }
+
     override fun getId(): String? = conversationId
 
     override suspend fun toggleMute() {
