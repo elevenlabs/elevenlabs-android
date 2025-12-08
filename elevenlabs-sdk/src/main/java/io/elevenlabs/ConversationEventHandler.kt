@@ -153,6 +153,27 @@ class ConversationEventHandler(
     }
 
     /**
+     * Handle agent chat response part events (streaming text chunks)
+     */
+    private suspend fun handleAgentChatResponsePart(event: ConversationEvent.AgentChatResponsePart) {
+        when (event.type) {
+            AgentChatResponsePartType.START -> {
+                Log.d("ConvEventHandler", "Agent text stream started")
+                // Update conversation mode to speaking when streaming starts
+                _conversationMode.value = ConversationMode.SPEAKING
+            }
+            AgentChatResponsePartType.DELTA -> {
+                Log.d("ConvEventHandler", "Agent text chunk: ${event.text}")
+            }
+            AgentChatResponsePartType.STOP -> {
+                Log.d("ConvEventHandler", "Agent text stream ended")
+                // Enable feedback on agent reply completion
+                onCanSendFeedbackChange?.invoke(true)
+            }
+        }
+    }
+
+    /**
      * Handle user transcript events
      */
     private suspend fun handleUserTranscript(event: ConversationEvent.UserTranscript) {
