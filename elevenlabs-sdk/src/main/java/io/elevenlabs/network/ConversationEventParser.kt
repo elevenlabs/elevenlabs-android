@@ -110,9 +110,6 @@ object ConversationEventParser {
      * Handles both "client_tool_call" and "agent_tool_request" event formats
      */
     private fun parseClientToolCall(jsonObject: JsonObject): ConversationEvent.ClientToolCall {
-        // Determine which format we're dealing with for backward compatibility
-        val isAgentToolRequest = jsonObject.has("agent_tool_request")
-        
         // Payloads can be nested under "client_tool_call", "agent_tool_request", or be flat
         val obj = jsonObject.getAsJsonObject("client_tool_call")
             ?: jsonObject.getAsJsonObject("agent_tool_request")
@@ -140,18 +137,18 @@ object ConversationEventParser {
 
         // Determine expects_response value
         // - If explicitly set in payload, use that value
-        // - For new "agent_tool_request" format: default to true for client tools (server doesn't send the field)
-        // - For legacy "client_tool_call" format: default to false for backward compatibility
-        val toolType = obj.get("tool_type")?.asString
+        // - If not present, default to true for client tools (most client tools expect responses)
+        // 
+        // Rationale: The server may not include expects_response in the payload even when the tool
+        // configuration has expects_response: true. Since the primary purpose of client tools is to
+        // execute on the client and return results to the agent, defaulting to true is the safer choice.
+        // Tools that don't expect responses (fire-and-forget) should explicitly set expects_response: false.
         val expectsResponseElement = obj.get("expects_response")
         val expectsResponse = if (expectsResponseElement != null && !expectsResponseElement.isJsonNull) {
             expectsResponseElement.asBoolean
-        } else if (isAgentToolRequest && toolType == "client") {
-            // New format: default to true for client tools
-            true
         } else {
-            // Legacy format: maintain backward compatibility with false default
-            false
+            // Default to true when not specified - client tools typically expect responses
+            true
         }
 
         return ConversationEvent.ClientToolCall(
