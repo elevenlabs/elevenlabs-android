@@ -42,7 +42,7 @@ object ConversationEventParser {
                 "agent_chat_response_part" -> parseAgentChatResponsePart(jsonObject)
                 "internal_tentative_agent_response" -> parseTentativeAgentResponse(jsonObject)
                 "agent_response_metadata" -> parseAgentResponseMetadata(jsonObject)
-                "client_tool_call" -> parseClientToolCall(jsonObject)
+                "client_tool_call", "agent_tool_request" -> parseClientToolCall(jsonObject)
                 "agent_tool_response" -> parseAgentToolResponse(jsonObject)
                 "vad_score" -> parseVadScore(jsonObject)
                 "interruption" -> parseInterruption(jsonObject)
@@ -107,10 +107,13 @@ object ConversationEventParser {
 
     /**
      * Parse client tool call event
+     * Handles both "client_tool_call" and "agent_tool_request" event formats
      */
     private fun parseClientToolCall(jsonObject: JsonObject): ConversationEvent.ClientToolCall {
-        // Payloads can be either flat or nested under "client_tool_call"
-        val obj = jsonObject.getAsJsonObject("client_tool_call") ?: jsonObject
+        // Payloads can be nested under "client_tool_call", "agent_tool_request", or be flat
+        val obj = jsonObject.getAsJsonObject("client_tool_call")
+            ?: jsonObject.getAsJsonObject("agent_tool_request")
+            ?: jsonObject
 
         val parametersJson = obj.get("parameters")?.asJsonObject
         val parameters = mutableMapOf<String, Any>()
@@ -132,11 +135,27 @@ object ConversationEventParser {
             }
         }
 
+        // Determine expects_response value
+        // - If explicitly set in payload, use that value
+        // - If not present, default to true for client tools (most client tools expect responses)
+        // 
+        // Rationale: The server may not include expects_response in the payload even when the tool
+        // configuration has expects_response: true. Since the primary purpose of client tools is to
+        // execute on the client and return results to the agent, defaulting to true is the safer choice.
+        // Tools that don't expect responses (fire-and-forget) should explicitly set expects_response: false.
+        val expectsResponseElement = obj.get("expects_response")
+        val expectsResponse = if (expectsResponseElement != null && !expectsResponseElement.isJsonNull) {
+            expectsResponseElement.asBoolean
+        } else {
+            // Default to true when not specified - client tools typically expect responses
+            true
+        }
+
         return ConversationEvent.ClientToolCall(
             toolName = obj.get("tool_name")?.asString ?: "",
             parameters = parameters,
             toolCallId = obj.get("tool_call_id")?.asString ?: "",
-            expectsResponse = obj.get("expects_response")?.asBoolean == true,
+            expectsResponse = expectsResponse,
         )
     }
 
