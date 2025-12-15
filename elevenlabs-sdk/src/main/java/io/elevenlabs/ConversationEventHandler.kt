@@ -44,6 +44,12 @@ class ConversationEventHandler(
     // Keep track of the last event ID we sent feedback for to prevent duplicates
     private var _lastFeedbackSentForEventIdInt: Int? = null
 
+    // Track processed tool call IDs to prevent duplicate processing
+    private val processedToolCallIds = mutableSetOf<String>()
+
+    // Track tool call IDs we've already sent responses for
+    private val respondedToolCallIds = mutableSetOf<String>()
+
     /**
      * Handle incoming conversation events
      *
@@ -219,6 +225,16 @@ class ConversationEventHandler(
      */
     private suspend fun handleClientToolCall(event: ConversationEvent.ClientToolCall) {
         scope.launch {
+            // Deduplicate: Skip if we've already processed this exact tool call
+            // Note: Server may send the same toolCallId with different parameters (progressive update)
+            // We use a combination of toolCallId + parameters hash for deduplication
+            val eventKey = "${event.toolCallId}_${event.parameters.hashCode()}"
+            if (processedToolCallIds.contains(eventKey)) {
+                Log.d("ConvEventHandler", "Skipping duplicate tool call: ${event.toolName} (key: $eventKey)")
+                return@launch
+            }
+            processedToolCallIds.add(eventKey)
+
             val toolExists = toolRegistry.isToolRegistered(event.toolName)
             if (!toolExists) {
                 // Notify app layer about unhandled tool call
@@ -313,6 +329,13 @@ class ConversationEventHandler(
      * @param isError Whether the tool execution resulted in an error
      */
     fun sendToolResult(toolCallId: String, result: Map<String, Any>, isError: Boolean = false) {
+        // Prevent sending duplicate responses for the same tool call
+        if (respondedToolCallIds.contains(toolCallId)) {
+            Log.d("ConvEventHandler", "Skipping duplicate tool result for call ID: $toolCallId (already responded)")
+            return
+        }
+        respondedToolCallIds.add(toolCallId)
+
         val toolResultEvent = OutgoingEvent.ClientToolResult(
             toolCallId = toolCallId,
             result = result,
@@ -395,5 +418,7 @@ class ConversationEventHandler(
         scope.cancel()
         _lastAgentEventId = null
         _lastFeedbackSentForEventIdInt = null
+        processedToolCallIds.clear()
+        respondedToolCallIds.clear()
     }
 }
