@@ -95,10 +95,10 @@ interface ConversationSession {
      * execute your tool and then send the result back using this method.
      *
      * @param toolCallId The unique identifier for the tool call (from ClientToolCall event)
-     * @param result Map containing the result data
+     * @param result The result string to send back to the agent
      * @param isError Whether the tool execution resulted in an error
      */
-    fun sendToolResult(toolCallId: String, result: Map<String, Any>, isError: Boolean = false)
+    fun sendToolResult(toolCallId: String, result: String, isError: Boolean = false)
 
     // Audio Control Methods
 

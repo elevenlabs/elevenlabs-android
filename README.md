@@ -280,33 +280,19 @@ val config = ConversationConfig(
         // Handle dynamic tool execution
         when (toolCall.toolName) {
             "getDeviceInfo" -> {
-                val result = mapOf(
-                    "success" to true,
-                    "result" to "Device: ${Build.MODEL}",
-                    "error" to ""
-                )
-                session.sendToolResult(toolCall.toolCallId, result, isError = false)
+                // Send result as a string
+                session.sendToolResult(toolCall.toolCallId, "Device: ${Build.MODEL}", isError = false)
             }
             "fetchUserData" -> {
                 // Perform async operation
                 coroutineScope.launch {
                     val data = fetchDataFromAPI(toolCall.parameters)
-                    val result = mapOf(
-                        "success" to true,
-                        "result" to data,
-                        "error" to ""
-                    )
-                    session.sendToolResult(toolCall.toolCallId, result, isError = false)
+                    session.sendToolResult(toolCall.toolCallId, data, isError = false)
                 }
             }
             else -> {
-                // Unknown tool
-                val errorResult = mapOf(
-                    "success" to false,
-                    "result" to "",
-                    "error" to "Unknown tool: ${toolCall.toolName}"
-                )
-                session.sendToolResult(toolCall.toolCallId, errorResult, isError = true)
+                // Unknown tool - send error
+                session.sendToolResult(toolCall.toolCallId, "Unknown tool: ${toolCall.toolName}", isError = true)
             }
         }
     }
@@ -314,7 +300,7 @@ val config = ConversationConfig(
 ```
 
 **Key methods:**
-- `session.sendToolResult(toolCallId, result, isError)`: Send tool execution results back to the agent manually. Use this in the `onUnhandledClientToolCall` callback to respond to dynamic tool calls.
+- `session.sendToolResult(toolCallId, result, isError)`: Send tool execution results back to the agent manually. The `result` parameter is a string (use JSON string for complex data). Use this in the `onUnhandledClientToolCall` callback to respond to dynamic tool calls.
 - `toolCall.expectsResponse`: Check this property to determine if the agent expects a response. If `false`, the tool is fire-and-forget and you can skip calling `sendToolResult()`.
 
 This approach is useful for:

@@ -15,7 +15,7 @@ import org.junit.Assert.*
  * This test suite verifies:
  * 1. sendToolResult() method correctly sends tool results
  * 2. Tool result event structure and serialization
- * 3. Support for complex nested result structures
+ * 3. Support for string result values
  */
 class DynamicClientToolTest {
 
@@ -47,10 +47,7 @@ class DynamicClientToolTest {
             messageCallback = messageCallback
         )
 
-        val result = mapOf(
-            "data" to "test data",
-            "count" to 42
-        )
+        val result = "The temperature is 25 degrees"
 
         eventHandler.sendToolResult(
             toolCallId = "tool-123",
@@ -73,9 +70,7 @@ class DynamicClientToolTest {
             messageCallback = messageCallback
         )
 
-        val errorResult = mapOf(
-            "error" to "Something went wrong"
-        )
+        val errorResult = "Something went wrong"
 
         eventHandler.sendToolResult(
             toolCallId = "tool-456",
@@ -91,38 +86,26 @@ class DynamicClientToolTest {
     }
 
     @Test
-    fun `sendToolResult with complex nested result structure`() {
+    fun `sendToolResult with JSON string result`() {
         val eventHandler = ConversationEventHandler(
             audioManager = audioManager,
             toolRegistry = toolRegistry,
             messageCallback = messageCallback
         )
 
-        val complexResult = mapOf(
-            "status" to "completed",
-            "data" to mapOf(
-                "items" to listOf(
-                    mapOf("id" to 1, "name" to "Item 1"),
-                    mapOf("id" to 2, "name" to "Item 2")
-                ),
-                "count" to 2
-            ),
-            "metadata" to mapOf(
-                "timestamp" to 1234567890,
-                "version" to "1.0.0"
-            )
-        )
+        // When you need to send complex data, serialize it as a JSON string
+        val jsonResult = """{"status":"completed","items":[{"id":1,"name":"Item 1"},{"id":2,"name":"Item 2"}],"count":2}"""
 
         eventHandler.sendToolResult(
             toolCallId = "complex-789",
-            result = complexResult,
+            result = jsonResult,
             isError = false
         )
 
         assertEquals(1, capturedEvents.size)
         val event = capturedEvents[0] as OutgoingEvent.ClientToolResult
         assertEquals("complex-789", event.toolCallId)
-        assertEquals(complexResult, event.result)
+        assertEquals(jsonResult, event.result)
         assertFalse(event.isError)
     }
 }
