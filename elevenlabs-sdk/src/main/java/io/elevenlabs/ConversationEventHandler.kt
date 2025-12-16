@@ -228,11 +228,7 @@ class ConversationEventHandler(
                 if (onUnhandledClientToolCall == null && event.expectsResponse) {
                     val failureEvent = OutgoingEvent.ClientToolResult(
                         toolCallId = event.toolCallId,
-                        result = mapOf<String, Any>(
-                            "success" to false,
-                            "result" to "",
-                            "error" to "Tool '${event.toolName}' not registered and no handler provided"
-                        ),
+                        result = "Tool '${event.toolName}' not registered and no handler provided",
                         isError = true
                     )
                     messageCallback(failureEvent)
@@ -251,13 +247,16 @@ class ConversationEventHandler(
 
             // Send result back to agent if response is expected and result is not null
             if (event.expectsResponse && result != null) {
+                // Send the result string directly - backend expects a string, not a wrapped object
+                val resultString = if (result.success) {
+                    result.result
+                } else {
+                    result.error ?: "Tool execution failed"
+                }
+                
                 val toolResultEvent = OutgoingEvent.ClientToolResult(
                     toolCallId = event.toolCallId,
-                    result = mapOf<String, Any>(
-                        "success" to result.success,
-                        "result" to result.result,
-                        "error" to (result.error ?: "")
-                    ),
+                    result = resultString,
                     isError = !result.success
                 )
 
@@ -309,10 +308,10 @@ class ConversationEventHandler(
      * Send the result of a client tool execution back to the agent
      *
      * @param toolCallId The unique identifier for the tool call
-     * @param result Map containing the result data
+     * @param result The result string to send back to the agent
      * @param isError Whether the tool execution resulted in an error
      */
-    fun sendToolResult(toolCallId: String, result: Map<String, Any>, isError: Boolean = false) {
+    fun sendToolResult(toolCallId: String, result: String, isError: Boolean = false) {
         val toolResultEvent = OutgoingEvent.ClientToolResult(
             toolCallId = toolCallId,
             result = result,

@@ -363,11 +363,13 @@ sealed class OutgoingEvent {
 
     /**
      * Tool result event
+     * Note: result must be a String (plain text or JSON string), not a Map/Object.
+     * The backend expects result as a string field.
      */
     data class ClientToolResult(
         @SerializedName("tool_call_id")
         val toolCallId: String,
-        val result: Map<String, Any>,
+        val result: String,
         @SerializedName("is_error")
         val isError: Boolean = false,
     ) : OutgoingEvent() {

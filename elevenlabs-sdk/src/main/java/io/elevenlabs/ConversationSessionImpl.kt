@@ -203,7 +203,7 @@ internal class ConversationSessionImpl(
         eventHandler.sendUserActivity()
     }
 
-    override fun sendToolResult(toolCallId: String, result: Map<String, Any>, isError: Boolean) {
+    override fun sendToolResult(toolCallId: String, result: String, isError: Boolean) {
         eventHandler.sendToolResult(toolCallId, result, isError)
     }
 
