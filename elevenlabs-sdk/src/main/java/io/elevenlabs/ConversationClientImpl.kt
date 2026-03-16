@@ -42,7 +42,8 @@ internal object ConversationClientImpl {
             val tokenResponse = tokenService.fetchPublicAgentToken(
                 config.agentId!!,
                 config.overrides?.client?.source ?: "android_sdk",
-                config.overrides?.client?.version ?: BuildConfig.SDK_VERSION
+                config.overrides?.client?.version ?: BuildConfig.SDK_VERSION,
+                config.environment
             )
             config.copy(conversationToken = tokenResponse.token, agentId = null)
         } else {

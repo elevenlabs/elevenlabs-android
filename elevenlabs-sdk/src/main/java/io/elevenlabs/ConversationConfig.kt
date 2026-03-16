@@ -27,6 +27,7 @@ import io.elevenlabs.models.DisconnectionDetails
  * @param audioInputSampleRate Sample rate for audio recording in Hz (default: 48000 for high quality)
  * @param apiEndpoint Base URL for ElevenLabs API (default: "https://api.elevenlabs.io")
  * @param websocketUrl WebSocket URL for LiveKit WebRTC connection (default: "wss://livekit.rtc.elevenlabs.io")
+ * @param environment Optional environment name for the agent (defaults to "production" on the server)
  */
 data class ConversationConfig(
     val agentId: String? = null,
@@ -36,6 +37,7 @@ data class ConversationConfig(
     val audioInputSampleRate: Int = 48000,
     val apiEndpoint: String = "https://api.elevenlabs.io",
     val websocketUrl: String = "wss://livekit.rtc.elevenlabs.io",
+    val environment: String? = null,
     val overrides: Overrides? = null,
     val customLlmExtraBody: Map<String, Any>? = null,
     val dynamicVariables: Map<String, Any>? = null,
