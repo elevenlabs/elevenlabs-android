@@ -27,11 +27,12 @@ class TokenService(
      * @param agentId The ID of the public agent to get a token for
      * @param source Optional source identifier (defaults to "android_sdk")
      * @param version Optional version string (defaults to SDK version)
+     * @param environment Optional environment name (defaults to "production" on the server)
      * @return TokenResponse containing the token and connection details
      * @throws TokenServiceException if the request fails or returns an error
      */
-    suspend fun fetchPublicAgentToken(agentId: String, source: String, version: String): TokenResponse = withContext(Dispatchers.IO) {
-        val url = buildTokenUrl(agentId, source, version)
+    suspend fun fetchPublicAgentToken(agentId: String, source: String, version: String, environment: String? = null): TokenResponse = withContext(Dispatchers.IO) {
+        val url = buildTokenUrl(agentId, source, version, environment)
 
         val request = Request.Builder()
             .url(url)
@@ -69,10 +70,13 @@ class TokenService(
      * Build the URL for fetching conversation tokens
      *
      * @param agentId The agent ID to include in the request
+     * @param environment Optional environment name
      * @return Complete URL for the token request
      */
-    private fun buildTokenUrl(agentId: String, source: String, version: String): String {
-        return "$baseUrl/v1/convai/conversation/token?agent_id=$agentId&source=$source&version=$version"
+    private fun buildTokenUrl(agentId: String, source: String, version: String, environment: String? = null): String {
+        var url = "$baseUrl/v1/convai/conversation/token?agent_id=$agentId&source=$source&version=$version"
+        environment?.let { url += "&environment=$it" }
+        return url
     }
 }
 
