@@ -156,7 +156,8 @@ enum class Language(val code: String) {
     SK("sk"),
     NO("no"),
     VI("vi"),
-    TL("tl");
+    TL("tl"),
+    LT("lt");
 
     companion object {
         fun fromCode(code: String): Language? = entries.find { it.code == code }
