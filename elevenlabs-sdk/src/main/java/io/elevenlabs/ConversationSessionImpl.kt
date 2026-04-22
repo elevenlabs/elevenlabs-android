@@ -117,8 +117,9 @@ internal class ConversationSessionImpl(
                 _status.value = connectionState.toConversationStatus()
             }
 
-            // Start the connection
-            val serverUrl = config.websocketUrl
+            // Text-only sessions use the ConvAI WebSocket endpoint, which lives on the same host
+            // as the REST API; voice sessions use the LiveKit signaling URL.
+            val serverUrl = if (config.textOnly) config.apiEndpoint else config.websocketUrl
             val token = config.conversationToken ?: ""
             Log.d("ConversationSession", "Starting connection to $serverUrl")
             // Wrap onConnect to capture conversationId while preserving user's callback

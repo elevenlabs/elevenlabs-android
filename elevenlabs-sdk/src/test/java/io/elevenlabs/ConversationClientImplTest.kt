@@ -213,4 +213,51 @@ class ConversationClientImplTest {
         assertNotNull(builder)
         assertTrue(builder is ConversationSessionBuilder)
     }
+
+    @Test
+    fun `text-only session skips LiveKit and TokenService`() = runTest {
+        mockkObject(io.livekit.android.LiveKit)
+        mockkConstructor(TokenService::class)
+        mockkConstructor(io.elevenlabs.network.WebSocketConnection::class)
+        mockkConstructor(ConversationSessionImpl::class)
+        coEvery { anyConstructed<ConversationSessionImpl>().start() } just Runs
+
+        val config = ConversationConfig(
+            agentId = "agent-xyz",
+            textOnly = true
+        )
+
+        val result = ConversationClientImpl.startSession(config, mockContext)
+
+        assertNotNull(result)
+        verify(exactly = 0) {
+            io.livekit.android.LiveKit.create(any(), any())
+        }
+        coVerify(exactly = 0) {
+            anyConstructed<TokenService>().fetchPublicAgentToken(any(), any(), any(), any())
+        }
+    }
+
+    @Test
+    fun `text-only session accepts signed URL via conversationToken without agentId`() = runTest {
+        mockkObject(io.livekit.android.LiveKit)
+        mockkConstructor(TokenService::class)
+        mockkConstructor(io.elevenlabs.network.WebSocketConnection::class)
+        mockkConstructor(ConversationSessionImpl::class)
+        coEvery { anyConstructed<ConversationSessionImpl>().start() } just Runs
+
+        val config = ConversationConfig(
+            agentId = null,
+            conversationToken = "wss://api.elevenlabs.io/v1/convai/conversation?agent_id=X&conversation_signature=SIG",
+            textOnly = true
+        )
+
+        val result = ConversationClientImpl.startSession(config, mockContext)
+
+        assertNotNull(result)
+        verify(exactly = 0) { io.livekit.android.LiveKit.create(any(), any()) }
+        coVerify(exactly = 0) {
+            anyConstructed<TokenService>().fetchPublicAgentToken(any(), any(), any(), any())
+        }
+    }
 }

@@ -200,7 +200,11 @@ class WebSocketConnection(
             val obj = JSONObject(text)
             if (obj.optString("type") != "conversation_initiation_metadata") return
 
-            val meta = obj.optJSONObject("conversation_initiation_metadata") ?: obj
+            // Server nests the payload under conversation_initiation_metadata_event;
+            // the unsuffixed key and flat root are tolerated for forwards/backwards compatibility.
+            val meta = obj.optJSONObject("conversation_initiation_metadata_event")
+                ?: obj.optJSONObject("conversation_initiation_metadata")
+                ?: obj
             val id = meta.optString("conversation_id", "")
             if (id.isEmpty()) return
 
@@ -249,14 +253,26 @@ class WebSocketConnection(
         private const val NORMAL_CLOSURE = 1000
 
         internal fun buildWebSocketUrl(serverUrl: String, token: String, agentId: String?): String {
-            val base = serverUrl.trimEnd('/')
-            val params = mutableListOf<String>()
-            agentId?.takeIf { it.isNotBlank() }?.let { params += "agent_id=$it" }
-            if (token.isNotBlank()) params += "conversation_signature=$token"
-            require(params.isNotEmpty()) {
-                "WebSocket connection requires either agentId or a conversation signature"
+            // Private agent: token is the signed URL returned by
+            // /v1/convai/conversation/get-signed-url — opened verbatim.
+            if (token.isNotBlank()) {
+                require(token.startsWith("ws://") || token.startsWith("wss://")) {
+                    "conversationToken for text-only mode must be the signed WebSocket URL " +
+                        "from /v1/convai/conversation/get-signed-url"
+                }
+                return token
             }
-            return "$base$WS_PATH?${params.joinToString("&")}"
+
+            // Public agent: build the URL from agentId. The ConvAI WebSocket lives on the same
+            // host as the REST API, so accept either an https:// or wss:// serverUrl.
+            require(!agentId.isNullOrBlank()) {
+                "WebSocket connection requires either agentId (public) or conversationToken (private)"
+            }
+            val base = serverUrl
+                .replaceFirst("https://", "wss://")
+                .replaceFirst("http://", "ws://")
+                .trimEnd('/')
+            return "$base$WS_PATH?agent_id=$agentId"
         }
     }
 }

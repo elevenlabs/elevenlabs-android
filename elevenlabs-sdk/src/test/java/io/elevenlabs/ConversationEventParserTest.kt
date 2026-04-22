@@ -301,5 +301,28 @@ class ConversationEventParserTest {
 
         assertNull(event)
     }
+
+    @Test
+    fun `conversation_initiation_metadata parses event-suffixed payload`() {
+        val json = """
+            {
+                "type": "conversation_initiation_metadata",
+                "conversation_initiation_metadata_event": {
+                    "conversation_id": "conv_42",
+                    "agent_output_audio_format": "pcm_16000",
+                    "user_input_audio_format": "pcm_16000"
+                }
+            }
+        """.trimIndent()
+
+        val event = ConversationEventParser.parseIncomingEvent(json)
+
+        assertNotNull(event)
+        assertTrue(event is ConversationEvent.ConversationInitiationMetadata)
+        val meta = event as ConversationEvent.ConversationInitiationMetadata
+        assertEquals("conv_42", meta.conversationId)
+        assertEquals("pcm_16000", meta.agentOutputAudioFormat)
+        assertEquals("pcm_16000", meta.userInputAudioFormat)
+    }
 }
 

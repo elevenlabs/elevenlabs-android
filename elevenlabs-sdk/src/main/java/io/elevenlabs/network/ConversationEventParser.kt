@@ -202,7 +202,11 @@ object ConversationEventParser {
     }
 
     private fun parseConversationInitiationMetadata(jsonObject: JsonObject): ConversationEvent.ConversationInitiationMetadata {
-        val obj = jsonObject.getAsJsonObject("conversation_initiation_metadata") ?: jsonObject
+        // Production server nests under conversation_initiation_metadata_event; the unsuffixed
+        // key and flat root are tolerated for forwards/backwards compatibility.
+        val obj = jsonObject.getAsJsonObject("conversation_initiation_metadata_event")
+            ?: jsonObject.getAsJsonObject("conversation_initiation_metadata")
+            ?: jsonObject
         return ConversationEvent.ConversationInitiationMetadata(
             conversationId = obj.get("conversation_id")?.asString ?: "",
             agentOutputAudioFormat = obj.get("agent_output_audio_format")?.asString ?: "",

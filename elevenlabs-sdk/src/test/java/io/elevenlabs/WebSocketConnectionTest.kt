@@ -55,11 +55,11 @@ class WebSocketConnectionTest {
         unmockkAll()
     }
 
-    private fun wsBaseUrl(): String =
-        server.url("/").toString()
-            .removeSuffix("/")
-            .replaceFirst("http://", "ws://")
-            .replaceFirst("https://", "wss://")
+    /**
+     * Returns the MockWebServer base URL with the http:// scheme intact. WebSocketConnection
+     * is responsible for swapping to ws://, so we exercise that path in every test.
+     */
+    private fun apiBaseUrl(): String = server.url("/").toString().removeSuffix("/")
 
     /** Tracks created connections so tearDown can clean them up. */
     private fun newConnection(): WebSocketConnection =
@@ -87,9 +87,9 @@ class WebSocketConnectionTest {
     }
 
     @Test
-    fun `buildWebSocketUrl emits agent_id for public agents`() {
+    fun `buildWebSocketUrl converts https endpoint to wss`() {
         val url = WebSocketConnection.buildWebSocketUrl(
-            "wss://api.elevenlabs.io",
+            "https://api.elevenlabs.io",
             token = "",
             agentId = "agent-123"
         )
@@ -97,35 +97,43 @@ class WebSocketConnectionTest {
     }
 
     @Test
-    fun `buildWebSocketUrl emits agent_id and signature for private agents`() {
+    fun `buildWebSocketUrl converts http endpoint to ws`() {
         val url = WebSocketConnection.buildWebSocketUrl(
-            "wss://api.elevenlabs.io",
-            token = "sig-abc",
+            "http://localhost:8080",
+            token = "",
+            agentId = "agent-123"
+        )
+        assertEquals("ws://localhost:8080/v1/convai/conversation?agent_id=agent-123", url)
+    }
+
+    @Test
+    fun `buildWebSocketUrl preserves wss scheme`() {
+        val url = WebSocketConnection.buildWebSocketUrl(
+            "wss://api.eu.residency.elevenlabs.io",
+            token = "",
             agentId = "agent-123"
         )
         assertEquals(
-            "wss://api.elevenlabs.io/v1/convai/conversation?agent_id=agent-123&conversation_signature=sig-abc",
+            "wss://api.eu.residency.elevenlabs.io/v1/convai/conversation?agent_id=agent-123",
             url
         )
     }
 
     @Test
-    fun `buildWebSocketUrl emits signature alone when agent_id is missing`() {
-        val url = WebSocketConnection.buildWebSocketUrl(
-            "wss://api.elevenlabs.io",
-            token = "sig-abc",
-            agentId = null
-        )
-        assertEquals(
-            "wss://api.elevenlabs.io/v1/convai/conversation?conversation_signature=sig-abc",
-            url
-        )
+    fun `buildWebSocketUrl rejects a token that is not a ws URL`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            WebSocketConnection.buildWebSocketUrl(
+                "https://api.elevenlabs.io",
+                token = "raw-signature-not-a-url",
+                agentId = "agent-123"
+            )
+        }
     }
 
     @Test
     fun `buildWebSocketUrl trims trailing slashes`() {
         val url = WebSocketConnection.buildWebSocketUrl(
-            "wss://api.elevenlabs.io/",
+            "https://api.elevenlabs.io/",
             token = "",
             agentId = "agent-123"
         )
@@ -133,10 +141,32 @@ class WebSocketConnectionTest {
     }
 
     @Test
-    fun `buildWebSocketUrl requires agentId or signature`() {
+    fun `buildWebSocketUrl returns signed URL verbatim when token is a wss URL`() {
+        val signed = "wss://api.elevenlabs.io/v1/convai/conversation?agent_id=X&conversation_signature=SIG"
+        val url = WebSocketConnection.buildWebSocketUrl(
+            "https://api.elevenlabs.io",
+            token = signed,
+            agentId = null
+        )
+        assertEquals(signed, url)
+    }
+
+    @Test
+    fun `buildWebSocketUrl returns signed URL verbatim when token is a ws URL`() {
+        val signed = "ws://localhost:1234/v1/convai/conversation?agent_id=X&conversation_signature=SIG"
+        val url = WebSocketConnection.buildWebSocketUrl(
+            "http://localhost:1234",
+            token = signed,
+            agentId = null
+        )
+        assertEquals(signed, url)
+    }
+
+    @Test
+    fun `buildWebSocketUrl requires agentId when no token is provided`() {
         assertThrows(IllegalArgumentException::class.java) {
             WebSocketConnection.buildWebSocketUrl(
-                "wss://api.elevenlabs.io",
+                "https://api.elevenlabs.io",
                 token = "",
                 agentId = null
             )
@@ -158,7 +188,7 @@ class WebSocketConnectionTest {
 
         val connection = newConnection()
         runBlocking {
-            connection.connect("", wsBaseUrl(), ConversationConfig(agentId = "agent-xyz"))
+            connection.connect("", apiBaseUrl(), ConversationConfig(agentId = "agent-xyz"))
         }
 
         assertTrue("server saw open", opened.await(3, TimeUnit.SECONDS))
@@ -189,7 +219,7 @@ class WebSocketConnectionTest {
         }
 
         runBlocking {
-            connection.connect("", wsBaseUrl(), ConversationConfig(agentId = "agent-xyz"))
+            connection.connect("", apiBaseUrl(), ConversationConfig(agentId = "agent-xyz"))
         }
         assertTrue(ready.await(3, TimeUnit.SECONDS))
 
@@ -217,11 +247,12 @@ class WebSocketConnectionTest {
             }
         )
         val connection = newConnection()
-        runBlocking { connection.connect("", wsBaseUrl(), config) }
+        runBlocking { connection.connect("", apiBaseUrl(), config) }
         assertTrue(ready.await(3, TimeUnit.SECONDS))
 
+        // Production server nests under conversation_initiation_metadata_event.
         serverSocket.get().send(
-            """{"type":"conversation_initiation_metadata","conversation_initiation_metadata":{"conversation_id":"conv_42","agent_output_audio_format":"pcm_16000","user_input_audio_format":"pcm_16000"}}"""
+            """{"type":"conversation_initiation_metadata","conversation_initiation_metadata_event":{"conversation_id":"conv_42","agent_output_audio_format":"pcm_16000","user_input_audio_format":"pcm_16000"}}"""
         )
 
         assertTrue("onConnect fired", onConnectFired.await(3, TimeUnit.SECONDS))
@@ -252,7 +283,7 @@ class WebSocketConnectionTest {
             if (state == ConnectionState.DISCONNECTED) capturedState.set(state)
         }
 
-        runBlocking { connection.connect("", wsBaseUrl(), config) }
+        runBlocking { connection.connect("", apiBaseUrl(), config) }
         assertTrue(ready.await(3, TimeUnit.SECONDS))
 
         serverSocket.get().close(1000, "bye")
@@ -281,7 +312,7 @@ class WebSocketConnectionTest {
         )
 
         val connection = newConnection()
-        runBlocking { connection.connect("", wsBaseUrl(), config) }
+        runBlocking { connection.connect("", apiBaseUrl(), config) }
         assertTrue(ready.await(3, TimeUnit.SECONDS))
 
         serverSocket.get().close(1011, "internal error")
@@ -308,7 +339,7 @@ class WebSocketConnectionTest {
         )
 
         val connection = newConnection()
-        runBlocking { connection.connect("", wsBaseUrl(), config) }
+        runBlocking { connection.connect("", apiBaseUrl(), config) }
 
         assertTrue("onDisconnect fired", disconnected.await(3, TimeUnit.SECONDS))
         assertTrue(captured.get() is DisconnectionDetails.Error)
