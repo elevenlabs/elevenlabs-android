@@ -198,6 +198,23 @@
 
     </LinearLayout>
 
+    <!-- Muted-speech banner: shown transiently when the user speaks while muted -->
+    <TextView
+        android:id="@+id/mutedSpeechBanner"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="You appear to be speaking. Do you want to unmute?"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:padding="12dp"
+        android:layout_marginTop="12dp"
+        android:background="@color/status_connecting"
+        android:textColor="@color/primary_button_text"
+        android:visibility="gone"
+        android:clickable="true"
+        android:focusable="true" />
+
     <!-- Volume control below mute -->
     <LinearLayout
         android:id="@+id/volumeContainer"

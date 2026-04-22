@@ -53,6 +53,14 @@ class ConversationViewModel(application: Application) : AndroidViewModel(applica
     private val _isMuted = MutableLiveData<Boolean>(false)
     val isMuted: LiveData<Boolean> = _isMuted
 
+    // Audio level in dB when speech is detected while muted; cleared by the observer.
+    private val _mutedSpeechEvent = MutableLiveData<Float?>()
+    val mutedSpeechEvent: LiveData<Float?> = _mutedSpeechEvent
+
+    fun clearMutedSpeechEvent() {
+        _mutedSpeechEvent.postValue(null)
+    }
+
     fun startConversation(activityContext: Context) {
         if (currentSession != null && _uiState.value != UiState.Idle && _uiState.value !is UiState.Error) {
             Log.d("ConversationViewModel", "Session already active or connecting.")
@@ -65,7 +73,7 @@ class ConversationViewModel(application: Application) : AndroidViewModel(applica
         viewModelScope.launch {
             try {
                 val config = io.elevenlabs.ConversationConfig(
-                    agentId = "<your-agent-id>", // Replace with your agent ID
+                    agentId = "agent_0401kppkepp0ed9ac8x2mw2jwqzk", // Replace with your agent ID
                     conversationToken = null,
                     userId = "demo-user",
                     textOnly = false,
@@ -145,7 +153,13 @@ class ConversationViewModel(application: Application) : AndroidViewModel(applica
                     onError = { code, message ->
                         Log.e("ConversationViewModel", "onError: Server error ($code): ${message ?: "unknown"}")
                         _errorMessage.postValue("Server error ($code): ${message ?: "unknown"}")
-                    }
+                    },
+                    audioConfiguration = io.elevenlabs.AudioPipelineConfiguration(
+                        useSoftwareMute = true,
+                        onMutedSpeech = { event ->
+                            _mutedSpeechEvent.postValue(event.audioLevel)
+                        },
+                    ),
                 )
 
                 val session = ConversationClient.startSession(config, activityContext)

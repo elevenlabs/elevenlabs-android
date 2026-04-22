@@ -33,10 +33,25 @@ interface AudioManager {
     suspend fun stopPlayback()
 
     /**
-     * Set the microphone mute state
+     * Set the microphone mute state.
+     *
+     * When software mute is enabled via [io.elevenlabs.AudioPipelineConfiguration.useSoftwareMute],
+     * this toggles the software mute and keeps the capture pipeline alive so
+     * `onMutedSpeech` can fire. Otherwise the microphone is muted at the OS level.
+     *
      * @param muted true to mute microphone, false to unmute
      */
     suspend fun setMicMuted(muted: Boolean)
+
+    /**
+     * Mute the microphone at the OS/track level regardless of software-mute configuration.
+     *
+     * Useful if software mute is enabled but the caller wants to explicitly
+     * disable the microphone track (for example, a dedicated "disable microphone" UI).
+     *
+     * @param muted true to mute, false to unmute
+     */
+    suspend fun setMicrophoneMuted(muted: Boolean)
 
     /**
      * Check if the microphone is currently muted

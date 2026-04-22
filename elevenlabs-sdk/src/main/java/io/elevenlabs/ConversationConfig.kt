@@ -6,6 +6,32 @@ import io.elevenlabs.models.ConversationStatus
 import io.elevenlabs.models.DisconnectionDetails
 
 /**
+ * Event emitted when the user is detected to be speaking while the microphone is muted.
+ *
+ * @param audioLevel Audio level in dB that triggered the event
+ */
+data class MutedSpeechEvent(
+    val audioLevel: Float,
+)
+
+/**
+ * Microphone pipeline configuration.
+ *
+ * @param useSoftwareMute When true, the microphone track stays open when muted
+ *                       and outbound audio is zeroed locally. Enables [onMutedSpeech].
+ * @param onMutedSpeech Invoked when local speech is detected while muted.
+ *                      Delivered on the main thread. Use this to show a
+ *                      "you're speaking while muted" indicator.
+ * @param mutedSpeechThreshold Audio level in dB at which speech is detected.
+ *                             Defaults to -35 dB. Lower values are more sensitive.
+ */
+data class AudioPipelineConfiguration(
+    val useSoftwareMute: Boolean? = null,
+    val onMutedSpeech: ((event: MutedSpeechEvent) -> Unit)? = null,
+    val mutedSpeechThreshold: Float? = null,
+)
+
+/**
  * Configuration class for conversation sessions
  *
  * This class defines the parameters needed to start a conversation with an ElevenLabs agent.
@@ -28,6 +54,7 @@ import io.elevenlabs.models.DisconnectionDetails
  * @param apiEndpoint Base URL for ElevenLabs API (default: "https://api.elevenlabs.io")
  * @param websocketUrl WebSocket URL for LiveKit WebRTC connection (default: "wss://livekit.rtc.elevenlabs.io")
  * @param environment Optional environment name for the agent (defaults to "production" on the server)
+ * @param audioConfiguration Optional microphone pipeline settings (software mute, muted-speech callbacks)
  */
 data class ConversationConfig(
     val agentId: String? = null,
@@ -59,8 +86,9 @@ data class ConversationConfig(
     val onConversationInitiationMetadata: ((conversationId: String, agentOutputFormat: String, userInputFormat: String) -> Unit)? = null,
     val onInterruption: ((eventId: Int) -> Unit)? = null,
     val onDisconnect: ((details: DisconnectionDetails) -> Unit)? = null,
-    val onError: ((code: Int, message: String?) -> Unit)? = null
+    val onError: ((code: Int, message: String?) -> Unit)? = null,
 
+    val audioConfiguration: AudioPipelineConfiguration? = null,
 ) {
     init {
         // Validation: agentId should not be empty if provided

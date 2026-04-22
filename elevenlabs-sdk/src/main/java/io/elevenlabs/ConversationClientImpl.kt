@@ -5,6 +5,7 @@ import android.util.Log
 import io.elevenlabs.BuildConfig
 import io.elevenlabs.audio.AudioSessionManager
 import io.elevenlabs.audio.LiveKitAudioManager
+import io.elevenlabs.audio.SoftwareMuteProcessor
 import io.elevenlabs.network.TokenService
 import io.elevenlabs.network.WebRTCConnection
 import io.elevenlabs.ConversationSession
@@ -12,6 +13,7 @@ import io.elevenlabs.ConversationConfig
 import io.livekit.android.LiveKit
 import io.livekit.android.LiveKitOverrides
 import io.livekit.android.AudioOptions
+import io.livekit.android.audio.AudioProcessorOptions
 
 /**
  * Internal implementation of ConversationClient
@@ -50,6 +52,18 @@ internal object ConversationClientImpl {
             config
         }
 
+        val audioCfg = finalConfig.audioConfiguration
+        val softwareMuteProcessor: SoftwareMuteProcessor? =
+            if (audioCfg?.useSoftwareMute == true) {
+                SoftwareMuteProcessor(
+                    onMutedSpeech = audioCfg.onMutedSpeech,
+                    mutedSpeechThresholdInDb = audioCfg.mutedSpeechThreshold
+                        ?: SoftwareMuteProcessor.DEFAULT_THRESHOLD_DB,
+                )
+            } else {
+                null
+            }
+
         // Create LiveKit room
         val room = LiveKit.create(
             appContext = context,
@@ -57,6 +71,9 @@ internal object ConversationClientImpl {
                 audioOptions = AudioOptions(
                     javaAudioDeviceModuleCustomizer = { builder ->
                         builder.setSampleRate(finalConfig.audioInputSampleRate)
+                    },
+                    audioProcessorOptions = softwareMuteProcessor?.let {
+                        AudioProcessorOptions(capturePostProcessor = it)
                     }
                 )
             )
@@ -67,9 +84,8 @@ internal object ConversationClientImpl {
         val connection = WebRTCConnection(context, room)
         Log.d("ConversationClient", "WebRTCConnection initialized")
 
-        // Create audio manager
         val audioSessionManager = AudioSessionManager(context)
-        val audioManager = LiveKitAudioManager(context, room)
+        val audioManager = LiveKitAudioManager(context, room, softwareMuteProcessor)
         Log.d("ConversationClient", "LiveKitAudioManager initialized")
 
         // Create client tools registry from configuration

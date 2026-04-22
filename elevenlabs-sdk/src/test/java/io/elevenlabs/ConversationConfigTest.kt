@@ -164,6 +164,7 @@ class ConversationConfigTest {
         assertNull(config.onStatusChange)
         assertNull(config.onCanSendFeedbackChange)
         assertNull(config.onUnhandledClientToolCall)
+        assertNull(config.audioConfiguration)
     }
 
     @Test

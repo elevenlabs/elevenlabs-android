@@ -41,8 +41,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var contextualButtonsRow: android.widget.LinearLayout
     private lateinit var muteButton: Button
     private lateinit var muteContainer: android.widget.LinearLayout
+    private lateinit var mutedSpeechBanner: TextView
     private lateinit var volumeSeekBar: android.widget.SeekBar
     private lateinit var volumeContainer: android.widget.LinearLayout
+
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val hideMutedSpeechBanner = Runnable { mutedSpeechBanner.visibility = android.view.View.GONE }
 
     // No broadcast receiver; we use ViewModel.mode
     private lateinit var connectButton: Button
@@ -86,8 +90,14 @@ class MainActivity : AppCompatActivity() {
         userSendButton = findViewById(R.id.userSendButton)
         muteButton = findViewById(R.id.muteButton)
         muteContainer = findViewById(R.id.muteContainer)
+        mutedSpeechBanner = findViewById(R.id.mutedSpeechBanner)
         volumeSeekBar = findViewById(R.id.volumeSeekBar)
         volumeContainer = findViewById(R.id.volumeContainer)
+
+        mutedSpeechBanner.setOnClickListener {
+            viewModel.toggleMute()
+            hideMutedSpeechBannerNow()
+        }
 
         connectButton.isEnabled = true
         connectButton.setOnClickListener {
@@ -143,6 +153,9 @@ class MainActivity : AppCompatActivity() {
         // Reflect mute state label based on current value when available
         viewModel.isMuted.observe(this) { muted ->
             muteButton.text = if (muted == true) "Unmute" else "Mute"
+            if (muted != true) {
+                hideMutedSpeechBannerNow()
+            }
         }
 
         // Volume control
@@ -199,6 +212,25 @@ class MainActivity : AppCompatActivity() {
             updateFeedbackUI(canSend)
         }
 
+        viewModel.mutedSpeechEvent.observe(this) { audioLevelDb ->
+            audioLevelDb?.let {
+                showMutedSpeechBanner(it)
+                viewModel.clearMutedSpeechEvent()
+            }
+        }
+    }
+
+    private fun showMutedSpeechBanner(audioLevelDb: Float) {
+        if (viewModel.isMuted.value != true) return
+        mutedSpeechBanner.text = "You appear to be speaking. Tap to unmute."
+        mutedSpeechBanner.visibility = android.view.View.VISIBLE
+        mainHandler.removeCallbacks(hideMutedSpeechBanner)
+        mainHandler.postDelayed(hideMutedSpeechBanner, 4_000L)
+    }
+
+    private fun hideMutedSpeechBannerNow() {
+        mainHandler.removeCallbacks(hideMutedSpeechBanner)
+        mutedSpeechBanner.visibility = android.view.View.GONE
     }
 
     private fun updateUIForState(state: UiState) {
@@ -260,6 +292,9 @@ class MainActivity : AppCompatActivity() {
         userSendButton.isEnabled = isConnected
         muteContainer.visibility = if (isConnected) android.view.View.VISIBLE else android.view.View.GONE
         muteButton.isEnabled = isConnected
+        if (!isConnected) {
+            hideMutedSpeechBannerNow()
+        }
         volumeContainer.visibility = if (isConnected) android.view.View.VISIBLE else android.view.View.GONE
         volumeSeekBar.isEnabled = isConnected
     }
