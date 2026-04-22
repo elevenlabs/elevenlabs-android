@@ -23,7 +23,7 @@ import kotlinx.coroutines.flow.StateFlow
 internal class ConversationSessionImpl(
     private val context: Context,
     private val config: ConversationConfig,
-    private val room: Room,
+    private val room: Room? = null,
     private val connection: BaseConnection,
     private val audioManager: AudioManager,
     private val toolRegistry: ClientToolRegistry

@@ -94,7 +94,7 @@ internal object ConversationClientImpl {
             room = room,
             connection = connection,
             audioManager = audioManager,
-            toolRegistry = toolRegistry
+            toolRegistry = toolRegistry,
         )
 
         // Automatically start the session
