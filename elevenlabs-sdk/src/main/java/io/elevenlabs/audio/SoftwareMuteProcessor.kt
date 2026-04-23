@@ -122,27 +122,39 @@ class SoftwareMuteProcessor internal constructor(
         numFrames: Int,
         floatCount: Int,
     ): Float {
-        if (numBands > 0 && numFrames > 0 && floatCount == numBands * numFrames) {
-            var totalRms = 0.0
-            for (c in 0 until numBands) {
-                var sumSquares = 0.0
-                for (f in 0 until numFrames) {
-                    val normalized =
-                        floatBuffer.get(startPos + f * numBands + c) / INT16_NORMALIZER
-                    sumSquares += normalized * normalized
-                }
-                totalRms += sqrt(sumSquares / numFrames)
-            }
-            val avgRms = (totalRms / numBands).toFloat()
-            return 20f * log10(max(avgRms, MIN_RMS))
-        }
+        val isInterleaved = numBands > 0 && numFrames > 0 && floatCount == numBands * numFrames
+        if (!isInterleaved) return rmsToDb(flatRms(floatBuffer, startPos, floatCount))
 
+        var totalRms = 0.0
+        for (c in 0 until numBands) {
+            totalRms += channelRms(floatBuffer, startPos, c, numBands, numFrames)
+        }
+        return rmsToDb((totalRms / numBands).toFloat())
+    }
+
+    private fun channelRms(
+        floatBuffer: FloatBuffer,
+        startPos: Int,
+        channel: Int,
+        numBands: Int,
+        numFrames: Int,
+    ): Double {
         var sumSquares = 0.0
-        for (i in 0 until floatCount) {
+        for (f in 0 until numFrames) {
+            val normalized = floatBuffer.get(startPos + f * numBands + channel) / INT16_NORMALIZER
+            sumSquares += normalized * normalized
+        }
+        return sqrt(sumSquares / numFrames)
+    }
+
+    private fun flatRms(floatBuffer: FloatBuffer, startPos: Int, count: Int): Float {
+        var sumSquares = 0.0
+        for (i in 0 until count) {
             val normalized = floatBuffer.get(startPos + i) / INT16_NORMALIZER
             sumSquares += normalized * normalized
         }
-        val rms = sqrt(sumSquares / floatCount).toFloat()
-        return 20f * log10(max(rms, MIN_RMS))
+        return sqrt(sumSquares / count).toFloat()
     }
+
+    private fun rmsToDb(rms: Float): Float = 20f * log10(max(rms, MIN_RMS))
 }
