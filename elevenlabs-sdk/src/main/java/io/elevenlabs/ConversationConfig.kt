@@ -6,24 +6,18 @@ import io.elevenlabs.models.ConversationStatus
 import io.elevenlabs.models.DisconnectionDetails
 
 /**
- * Event emitted when the user is detected to be speaking while the microphone is muted.
+ * Event emitted when the user is detected to be speaking while muted.
  *
  * @param audioLevel Audio level in dB that triggered the event
  */
-data class MutedSpeechEvent(
-    val audioLevel: Float,
-)
+data class MutedSpeechEvent(val audioLevel: Float)
 
 /**
  * Microphone pipeline configuration.
  *
- * @param useSoftwareMute When true, the microphone track stays open when muted
- *                       and outbound audio is zeroed locally. Enables [onMutedSpeech].
- * @param onMutedSpeech Invoked when local speech is detected while muted.
- *                      Delivered on the main thread. Use this to show a
- *                      "you're speaking while muted" indicator.
- * @param mutedSpeechThreshold Audio level in dB at which speech is detected.
- *                             Defaults to -35 dB. Lower values are more sensitive.
+ * @param useSoftwareMute When true, the microphone track stays open when muted and outbound audio is zeroed locally. Enables [onMutedSpeech].
+ * @param onMutedSpeech Invoked when local speech is detected while muted. Delivered on the main thread. Use this to show a "you're speaking while muted" indicator.
+ * @param mutedSpeechThreshold Audio level in dB at which speech is detected. Defaults to -35 dB. Lower values are more sensitive.
  */
 data class AudioPipelineConfiguration(
     val useSoftwareMute: Boolean? = null,
@@ -87,7 +81,6 @@ data class ConversationConfig(
     val onInterruption: ((eventId: Int) -> Unit)? = null,
     val onDisconnect: ((details: DisconnectionDetails) -> Unit)? = null,
     val onError: ((code: Int, message: String?) -> Unit)? = null,
-
     val audioConfiguration: AudioPipelineConfiguration? = null,
 ) {
     init {

@@ -37,9 +37,6 @@ class SoftwareMuteProcessorTest {
 
     private fun silence(count: Int): FloatArray = FloatArray(count) { 0f }
 
-    // Post-capture floats from LiveKit are int16-scaled (±32768), so tones
-    // are generated at int16 amplitudes and divided by 32768 inside the
-    // processor before dB is computed.
     private fun loudTone(count: Int, amplitudeInt16: Float = 16_000f): FloatArray =
         FloatArray(count) { i -> (amplitudeInt16 * sin(2.0 * PI * 440.0 * i / 48000.0)).toFloat() }
 

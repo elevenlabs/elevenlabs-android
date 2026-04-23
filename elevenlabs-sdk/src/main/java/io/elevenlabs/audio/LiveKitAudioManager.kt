@@ -19,11 +19,6 @@ import kotlinx.coroutines.flow.StateFlow
 class LiveKitAudioManager(
     private val context: Context,
     private val room: Room,
-    /**
-     * When non-null, [setMicMuted] toggles this processor instead of the
-     * OS-level microphone. The capture pipeline stays open so muted-speech
-     * detection can fire while outbound audio is zeroed.
-     */
     private val softwareMuteProcessor: SoftwareMuteProcessor? = null
 ) : AudioManager {
 
@@ -125,15 +120,9 @@ class LiveKitAudioManager(
 
     override suspend fun setMicMuted(muted: Boolean) {
         try {
-            if (softwareMuteProcessor != null) {
-                softwareMuteProcessor.setMuted(muted)
-            } else {
-                AudioUtils.setMicrophoneMuted(context, muted)
-            }
-
+            softwareMuteProcessor?.setMuted(muted) ?: AudioUtils.setMicrophoneMuted(context, muted)
             _isMuted.value = muted
             audioStateListener?.onMuteStateChanged(muted)
-
         } catch (e: Exception) {
             audioStateListener?.onAudioError("Failed to set mute state", e)
         }

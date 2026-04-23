@@ -108,21 +108,14 @@ interface ConversationSession {
     suspend fun toggleMute()
 
     /**
-     * Set microphone mute state.
-     *
-     * When software mute is enabled via [AudioPipelineConfiguration.useSoftwareMute],
-     * this toggles the software mute and keeps the capture pipeline alive so
-     * `onMutedSpeech` can fire. Otherwise it mutes the microphone at the OS level.
+     * Set microphone mute state
      *
      * @param muted true to mute, false to unmute
      */
     suspend fun setMicMuted(muted: Boolean)
 
     /**
-     * Mute the microphone at the OS/track level regardless of software-mute configuration.
-     *
-     * Useful if software mute is enabled but you explicitly want to disable
-     * the mic track (for example, a dedicated "disable microphone" UI).
+     * Mute the microphone at the OS/track level
      *
      * @param muted true to mute, false to unmute
      */

@@ -34,9 +34,6 @@ class SoftwareMuteProcessor internal constructor(
         private const val BUFFERS_ABOVE_TO_CONFIRM: Int = 4
         private const val BUFFERS_BELOW_TO_CLEAR: Int = 3
         private const val MIN_RMS: Float = 1e-6f
-
-        // LiveKit's capture post-processor delivers int16-scaled floats
-        // (range ±32768); normalise into [-1, 1] before computing dB.
         private const val INT16_NORMALIZER: Double = 32768.0
     }
 
@@ -88,9 +85,7 @@ class SoftwareMuteProcessor internal constructor(
             if (levelActive) {
                 consecutiveBelowCount = 0
                 consecutiveAboveCount += 1
-                if (consecutiveAboveCount >= BUFFERS_ABOVE_TO_CONFIRM) {
-                    hangoverLatched = true
-                }
+                if (consecutiveAboveCount >= BUFFERS_ABOVE_TO_CONFIRM) hangoverLatched = true
             } else {
                 consecutiveAboveCount = 0
                 consecutiveBelowCount += 1
@@ -100,13 +95,11 @@ class SoftwareMuteProcessor internal constructor(
                 }
             }
 
-            if (hangoverLatched && levelActive) {
-                val now = System.currentTimeMillis()
-                if (now - lastNotificationTimeMs > mutedSpeechThrottleMs) {
-                    lastNotificationTimeMs = now
-                    shouldFire = true
-                    fireLevel = db
-                }
+            val now = System.currentTimeMillis()
+            if (hangoverLatched && levelActive && now - lastNotificationTimeMs > mutedSpeechThrottleMs) {
+                lastNotificationTimeMs = now
+                shouldFire = true
+                fireLevel = db
             }
         }
 

@@ -198,7 +198,6 @@
 
     </LinearLayout>
 
-    <!-- Muted-speech banner: shown transiently when the user speaks while muted -->
     <TextView
         android:id="@+id/mutedSpeechBanner"
         android:layout_width="match_parent"

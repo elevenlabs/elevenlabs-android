@@ -52,16 +52,14 @@ internal object ConversationClientImpl {
             config
         }
 
-        val audioCfg = finalConfig.audioConfiguration
-        val softwareMuteProcessor: SoftwareMuteProcessor? =
-            if (audioCfg?.useSoftwareMute == true) {
+        val softwareMuteProcessor = finalConfig.audioConfiguration
+            ?.takeIf { it.useSoftwareMute == true }
+            ?.let {
                 SoftwareMuteProcessor(
-                    onMutedSpeech = audioCfg.onMutedSpeech,
-                    mutedSpeechThresholdInDb = audioCfg.mutedSpeechThreshold
+                    onMutedSpeech = it.onMutedSpeech,
+                    mutedSpeechThresholdInDb = it.mutedSpeechThreshold
                         ?: SoftwareMuteProcessor.DEFAULT_THRESHOLD_DB,
                 )
-            } else {
-                null
             }
 
         // Create LiveKit room
@@ -84,6 +82,7 @@ internal object ConversationClientImpl {
         val connection = WebRTCConnection(context, room)
         Log.d("ConversationClient", "WebRTCConnection initialized")
 
+        // Create audio manager
         val audioSessionManager = AudioSessionManager(context)
         val audioManager = LiveKitAudioManager(context, room, softwareMuteProcessor)
         Log.d("ConversationClient", "LiveKitAudioManager initialized")

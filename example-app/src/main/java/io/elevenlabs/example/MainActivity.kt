@@ -153,9 +153,7 @@ class MainActivity : AppCompatActivity() {
         // Reflect mute state label based on current value when available
         viewModel.isMuted.observe(this) { muted ->
             muteButton.text = if (muted == true) "Unmute" else "Mute"
-            if (muted != true) {
-                hideMutedSpeechBannerNow()
-            }
+            if (muted != true) hideMutedSpeechBannerNow()
         }
 
         // Volume control
@@ -292,9 +290,7 @@ class MainActivity : AppCompatActivity() {
         userSendButton.isEnabled = isConnected
         muteContainer.visibility = if (isConnected) android.view.View.VISIBLE else android.view.View.GONE
         muteButton.isEnabled = isConnected
-        if (!isConnected) {
-            hideMutedSpeechBannerNow()
-        }
+        if (!isConnected) hideMutedSpeechBannerNow()
         volumeContainer.visibility = if (isConnected) android.view.View.VISIBLE else android.view.View.GONE
         volumeSeekBar.isEnabled = isConnected
     }
