@@ -12,18 +12,11 @@ import kotlin.math.max
 import kotlin.math.sqrt
 
 /**
- * Capture post-processor used to implement software microphone mute.
+ * Capture post-processor that implements software microphone mute
  *
- * When muted, the microphone track stays open but outbound samples are zeroed
- * before transmission. The RMS of the captured audio is measured so that
- * "you're speaking while muted" events can be delivered via [onMutedSpeech].
- *
- * A 4-up / 3-down hangover latch suppresses single-buffer noise spikes, and
- * notifications are throttled to at most one every [mutedSpeechThrottleMs]
- * milliseconds while the user keeps talking above [mutedSpeechThresholdInDb].
- *
- * When unmuted, [processAudio] returns immediately without modifying the
- * buffer.
+ * This class zeroes outbound audio while muted so the capture pipeline stays
+ * open, measures RMS on the captured audio to detect speech while muted, and
+ * delivers throttled [onMutedSpeech] events after a short hangover latch.
  */
 class SoftwareMuteProcessor internal constructor(
     private val onMutedSpeech: ((MutedSpeechEvent) -> Unit)?,
@@ -56,7 +49,6 @@ class SoftwareMuteProcessor internal constructor(
     private var consecutiveBelowCount: Int = 0
     private var hangoverLatched: Boolean = false
 
-    /** Thread-safe. Resets the hangover latch when the mute state changes. */
     fun setMuted(newValue: Boolean) {
         synchronized(lock) {
             if (muted != newValue) {
@@ -121,11 +113,7 @@ class SoftwareMuteProcessor internal constructor(
         if (shouldFire) {
             val level = fireLevel
             dispatchMutedSpeech {
-                try {
-                    onMutedSpeech?.invoke(MutedSpeechEvent(audioLevel = level))
-                } catch (_: Throwable) {
-                    // Swallow to keep the capture pipeline alive.
-                }
+                try { onMutedSpeech?.invoke(MutedSpeechEvent(audioLevel = level)) } catch (_: Throwable) {}
             }
         }
 
