@@ -9,19 +9,27 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
 import io.elevenlabs.ConversationClient
 import io.elevenlabs.ConversationSession
+import io.elevenlabs.example.models.TextChatMessage
 import io.elevenlabs.example.models.UiState
 import io.elevenlabs.models.ConversationMode
 import io.elevenlabs.models.ConversationStatus
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * Simplified ViewModel for basic connection management
- *
- * Only handles connect/disconnect functionality with status updates
+ * Single ViewModel covering both voice and text-only conversations. The same SDK callbacks feed
+ * a shared transcript so a UI can render either modality (voice controls, chat bubbles, or both)
+ * from one source of truth.
  */
 class ConversationViewModel(application: Application) : AndroidViewModel(application) {
 
     private var currentSession: ConversationSession? = null
+
+    // Whether the active (or most recent) session was started in text-only mode. Used by retry().
+    private var lastTextOnly: Boolean = false
 
     // UI State
     private val _uiState = MutableLiveData<UiState>(UiState.Idle)
@@ -53,11 +61,24 @@ class ConversationViewModel(application: Application) : AndroidViewModel(applica
     private val _isMuted = MutableLiveData<Boolean>(false)
     val isMuted: LiveData<Boolean> = _isMuted
 
-    fun startConversation(activityContext: Context) {
+    // Chat transcript — populated for both voice (via onUserTranscript / onAgentResponse) and
+    // text-only (via sendUserMessage + onAgentResponse) sessions.
+    private val _messages = MutableStateFlow<List<TextChatMessage>>(emptyList())
+    val messages: StateFlow<List<TextChatMessage>> = _messages.asStateFlow()
+
+    private val _isAgentTyping = MutableStateFlow(false)
+    val isAgentTyping: StateFlow<Boolean> = _isAgentTyping.asStateFlow()
+
+    private var nextMessageId: Long = 1L
+
+    fun startConversation(activityContext: Context, textOnly: Boolean = true) {
         if (currentSession != null && _uiState.value != UiState.Idle && _uiState.value !is UiState.Error) {
-            Log.d("ConversationViewModel", "Session already active or connecting.")
+            Log.d(TAG, "Session already active or connecting.")
             return
         }
+
+        lastTextOnly = textOnly
+        resetTranscript()
 
         _uiState.value = UiState.Connecting
         _sessionStatus.value = ConversationStatus.CONNECTING
@@ -65,10 +86,10 @@ class ConversationViewModel(application: Application) : AndroidViewModel(applica
         viewModelScope.launch {
             try {
                 val config = io.elevenlabs.ConversationConfig(
-                    agentId = "<your-agent-id>", // Replace with your agent ID
+                    agentId = "agent_6401kpqeaxxpf4asyaggk74qqqmz", // Replace with your agent ID
                     conversationToken = null,
                     userId = "demo-user",
-                    textOnly = false,
+                    textOnly = textOnly,
                     overrides = null,
                     customLlmExtraBody = null,
                     dynamicVariables = null,
@@ -85,65 +106,68 @@ class ConversationViewModel(application: Application) : AndroidViewModel(applica
                         }
                     ),
                     onConnect = { conversationId ->
-                        Log.d("ConversationViewModel", "Connected id=$conversationId")
+                        Log.d(TAG, "Connected id=$conversationId")
                     },
                     onDisconnect = { reason ->
-                        Log.d("ConversationViewModel", "onDisconnect: $reason")
+                        Log.d(TAG, "onDisconnect: $reason")
+                        _isAgentTyping.value = false
                     },
                     onMessage = { source, message ->
                         // Receive messages from the server. Can be quite noisy hence commented out
-                        // Log.d("ConversationViewModel", "onMessage [$source]: $message")
-                     },
+                        // Log.d(TAG, "onMessage [$source]: $message")
+                    },
                     onModeChange = { mode: ConversationMode ->
                         _mode.postValue(mode)
                     },
                     onStatusChange = { status ->
-                        Log.d("ConversationViewModel", "onStatusChange: $status")
+                        Log.d(TAG, "onStatusChange: $status")
                     },
                     onCanSendFeedbackChange = { canSendFeedback ->
                         _canSendFeedback.postValue(canSendFeedback)
-                        Log.d("ConversationViewModel", "onCanSendFeedbackChange: $canSendFeedback")
+                        Log.d(TAG, "onCanSendFeedbackChange: $canSendFeedback")
                     },
                     onUnhandledClientToolCall = { toolCall ->
-                        Log.d("ConversationViewModel", "onUnhandledClientToolCall: $toolCall")
+                        Log.d(TAG, "onUnhandledClientToolCall: $toolCall")
                     },
                     onVadScore = { score ->
                         // VAD score is used to determine if the user is speaking.
                         // Can be used to trigger UI changes or audio processing decisions.
                         // Log commented out as it's quite noisy
-                        // Log.d("ConversationViewModel", "onVadScore: $score")
+                        // Log.d(TAG, "onVadScore: $score")
                     },
                     onAudioLevelChanged = { level ->
                         // Agent audio level (volume)
                         // Commented out as it's quite noisy
-                        // Log.d("ConversationViewModel", "audioLevel: $level")
+                        // Log.d(TAG, "audioLevel: $level")
                     },
                     onUserTranscript = { transcript ->
-                        Log.d("ConversationViewModel", "onUserTranscript: $transcript")
+                        Log.d(TAG, "onUserTranscript: $transcript")
+                        appendUserMessage(transcript)
                     },
                     onAudioAlignment = { alignment ->
-                        Log.d("ConversationViewModel", "onAudioAlignment: $alignment")
+                        Log.d(TAG, "onAudioAlignment: $alignment")
                     },
                     onAgentResponse = { response ->
-                        Log.d("ConversationViewModel", "onAgentResponse: $response")
+                        Log.d(TAG, "onAgentResponse: $response")
+                        appendAgentText(response)
                     },
                     onAgentResponseMetadata = { metadata ->
-                        Log.d("ConversationViewModel", "onAgentResponseMetadata: $metadata")
+                        Log.d(TAG, "onAgentResponseMetadata: $metadata")
                     },
                     onAgentResponseCorrection = { originalResponse, correctedResponse ->
-                        Log.d("ConversationViewModel", "onAgentResponseCorrection: original='$originalResponse', corrected='$correctedResponse'")
+                        Log.d(TAG, "onAgentResponseCorrection: original='$originalResponse', corrected='$correctedResponse'")
                     },
                     onAgentToolResponse = { toolName, toolCallId, toolType, isError ->
-                        Log.d("ConversationViewModel", "onAgentToolResponse: tool=$toolName, callId=$toolCallId, type=$toolType, isError=$isError")
+                        Log.d(TAG, "onAgentToolResponse: tool=$toolName, callId=$toolCallId, type=$toolType, isError=$isError")
                     },
                     onConversationInitiationMetadata = { conversationId, agentOutputFormat, userInputFormat ->
-                        Log.d("ConversationViewModel", "onConversationInitiationMetadata: id=$conversationId, agentOut=$agentOutputFormat, userIn=$userInputFormat")
+                        Log.d(TAG, "onConversationInitiationMetadata: id=$conversationId, agentOut=$agentOutputFormat, userIn=$userInputFormat")
                     },
                     onInterruption = { eventId ->
-                        Log.d("ConversationViewModel", "onInterruption: eventId=$eventId")
+                        Log.d(TAG, "onInterruption: eventId=$eventId")
                     },
                     onError = { code, message ->
-                        Log.e("ConversationViewModel", "onError: Server error ($code): ${message ?: "unknown"}")
+                        Log.e(TAG, "onError: Server error ($code): ${message ?: "unknown"}")
                         _errorMessage.postValue("Server error ($code): ${message ?: "unknown"}")
                     }
                 )
@@ -180,14 +204,14 @@ class ConversationViewModel(application: Application) : AndroidViewModel(applica
                 // Collect audio level flow (commented out as it's quite noisy)
                 // viewModelScope.launch {
                 //     session.audioLevel.collect { level ->
-                //         Log.d("ConversationViewModel", "audioLevel: $level")
+                //         Log.d(TAG, "audioLevel: $level")
                 //     }
                 // }
 
-                Log.d("ConversationViewModel", "Session created and started successfully")
+                Log.d(TAG, "Session created and started successfully (textOnly=$textOnly)")
 
             } catch (e: Exception) {
-                Log.e("ConversationViewModel", "Error starting conversation: ${e.message}", e)
+                Log.e(TAG, "Error starting conversation: ${e.message}", e)
                 _errorMessage.postValue("Failed to start conversation: ${e.localizedMessage ?: e.message}")
                 _uiState.postValue(UiState.Error)
                 _sessionStatus.postValue(ConversationStatus.ERROR)
@@ -203,16 +227,30 @@ class ConversationViewModel(application: Application) : AndroidViewModel(applica
 
                 currentSession?.endSession()
                 currentSession = null
+                _isAgentTyping.value = false
 
                 _uiState.value = UiState.Idle
                 _sessionStatus.value = ConversationStatus.DISCONNECTED
 
-                Log.d("ConversationViewModel", "Session ended successfully")
+                Log.d(TAG, "Session ended successfully")
             } catch (e: Exception) {
-                Log.e("ConversationViewModel", "Error ending conversation: ${e.message}", e)
+                Log.e(TAG, "Error ending conversation: ${e.message}", e)
                 _errorMessage.postValue("Failed to end conversation: ${e.localizedMessage ?: e.message}")
                 _uiState.postValue(UiState.Error)
             }
+        }
+    }
+
+    /**
+     * Tear down the current session and start a fresh one with the same modality. Used by the
+     * text chat error state's "Retry" action.
+     */
+    fun retry(activityContext: Context) {
+        viewModelScope.launch {
+            currentSession?.endSession()
+            currentSession = null
+            _errorMessage.postValue(null)
+            startConversation(activityContext, lastTextOnly)
         }
     }
 
@@ -221,7 +259,7 @@ class ConversationViewModel(application: Application) : AndroidViewModel(applica
         _audioPermissionRequired.value = !isGranted
 
         if (!isGranted) {
-            Log.d("ConversationViewModel", "Audio permission not granted - will use text-only mode")
+            Log.d(TAG, "Audio permission not granted - will use text-only mode")
         }
     }
 
@@ -231,30 +269,41 @@ class ConversationViewModel(application: Application) : AndroidViewModel(applica
 
     fun sendFeedback(isPositive: Boolean) {
         currentSession?.sendFeedback(isPositive)
-        Log.d("ConversationViewModel", "Sent ${if (isPositive) "positive" else "negative"} feedback")
+        Log.d(TAG, "Sent ${if (isPositive) "positive" else "negative"} feedback")
     }
 
     fun sendContextualUpdate(text: String) {
         try {
             currentSession?.sendContextualUpdate(text)
         } catch (t: Throwable) {
-            Log.d("ConversationViewModel", "Failed to send contextual update: ${t.message}")
+            Log.d(TAG, "Failed to send contextual update: ${t.message}")
         }
     }
 
     fun sendUserMessage(text: String) {
-        try {
-            currentSession?.sendUserMessage(text)
-        } catch (t: Throwable) {
-            Log.d("ConversationViewModel", "Failed to send user message: ${t.message}")
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) return
+        val session = currentSession
+        if (session == null) {
+            _errorMessage.postValue("Not connected")
+            return
         }
+        try {
+            session.sendUserMessage(trimmed)
+        } catch (t: Throwable) {
+            Log.d(TAG, "Failed to send user message: ${t.message}")
+            _errorMessage.postValue(t.localizedMessage ?: "Send failed")
+            return
+        }
+        appendUserMessage(trimmed)
+        _isAgentTyping.value = true
     }
 
     fun sendUserActivity() {
         try {
             currentSession?.sendUserActivity()
         } catch (t: Throwable) {
-            Log.d("ConversationViewModel", "Failed to send user activity: ${t.message}")
+            Log.d(TAG, "Failed to send user activity: ${t.message}")
         }
     }
 
@@ -263,7 +312,7 @@ class ConversationViewModel(application: Application) : AndroidViewModel(applica
             try {
                 currentSession?.toggleMute()
             } catch (t: Throwable) {
-                Log.d("ConversationViewModel", "Failed to toggle mute: ${t.message}")
+                Log.d(TAG, "Failed to toggle mute: ${t.message}")
             }
         }
     }
@@ -271,14 +320,48 @@ class ConversationViewModel(application: Application) : AndroidViewModel(applica
     fun setVolume(volume: Float) {
         try {
             currentSession?.setVolume(volume)
-            Log.d("ConversationViewModel", "Volume set to: $volume")
+            Log.d(TAG, "Volume set to: $volume")
         } catch (t: Throwable) {
-            Log.d("ConversationViewModel", "Failed to set volume: ${t.message}")
+            Log.d(TAG, "Failed to set volume: ${t.message}")
         }
+    }
+
+    private fun resetTranscript() {
+        _messages.value = emptyList()
+        _isAgentTyping.value = false
+        nextMessageId = 1L
+    }
+
+    private fun appendUserMessage(text: String) {
+        if (text.isBlank()) return
+        _messages.update { it + TextChatMessage(nextMessageId++, text, isFromUser = true) }
+    }
+
+    /**
+     * Append agent text to the latest agent bubble (streaming deltas) or start a new bubble if the
+     * previous message was from the user.
+     */
+    private fun appendAgentText(text: String) {
+        if (text.isEmpty()) return
+        _messages.update { current ->
+            val msgs = current.toMutableList()
+            val last = msgs.lastOrNull()
+            if (last != null && !last.isFromUser) {
+                msgs[msgs.lastIndex] = last.copy(content = last.content + text)
+            } else {
+                msgs += TextChatMessage(nextMessageId++, text, isFromUser = false)
+            }
+            msgs
+        }
+        _isAgentTyping.value = false
     }
 
     override fun onCleared() {
         super.onCleared()
         endConversation()
+    }
+
+    companion object {
+        private const val TAG = "ConversationViewModel"
     }
 }
