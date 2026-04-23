@@ -338,20 +338,25 @@ class ConversationViewModel(application: Application) : AndroidViewModel(applica
     }
 
     /**
-     * Append agent text to the latest agent bubble (streaming deltas) or start a new bubble if the
-     * previous message was from the user.
+     * Append agent text to the latest agent bubble or start a new bubble if the previous message
+     * was from the user. Three SDK events funnel into onAgentResponse — streaming deltas, tentative
+     * partials, and a final consolidated message — so dedup against the full bubble content rather
+     * than appending blindly.
      */
     private fun appendAgentText(text: String) {
         if (text.isEmpty()) return
         _messages.update { current ->
-            val msgs = current.toMutableList()
-            val last = msgs.lastOrNull()
-            if (last != null && !last.isFromUser) {
-                msgs[msgs.lastIndex] = last.copy(content = last.content + text)
-            } else {
-                msgs += TextChatMessage(nextMessageId++, text, isFromUser = false)
+            val last = current.lastOrNull()
+            if (last == null || last.isFromUser) {
+                return@update current + TextChatMessage(nextMessageId++, text, isFromUser = false)
             }
-            msgs
+            val updated = when {
+                last.content == text -> last
+                text.startsWith(last.content) -> last.copy(content = text)
+                else -> last.copy(content = last.content + text)
+            }
+            if (updated === last) current
+            else current.toMutableList().also { it[it.lastIndex] = updated }
         }
         _isAgentTyping.value = false
     }
