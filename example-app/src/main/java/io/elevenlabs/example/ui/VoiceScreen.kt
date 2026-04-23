@@ -1,13 +1,18 @@
 package io.elevenlabs.example.ui
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -28,8 +33,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import io.elevenlabs.example.R
 import io.elevenlabs.models.ConversationMode
 import io.elevenlabs.models.ConversationStatus
 
@@ -40,8 +49,8 @@ private val ErrorRed = Color(0xFFEF4444)
 
 /**
  * Voice-mode controls: status, mute, volume, feedback, mode indicator, and a composer for sending
- * contextual updates or text user messages over the active session. Connecting / disconnecting is
- * driven by the host (start screen + header), not from this surface.
+ * contextual updates or text user messages over the active session. Owns its own Disconnect
+ * action — there is no shared header.
  */
 @Composable
 fun VoiceScreen(
@@ -49,6 +58,7 @@ fun VoiceScreen(
     mode: ConversationMode?,
     isMuted: Boolean,
     canSendFeedback: Boolean,
+    onDisconnect: () -> Unit,
     onToggleMute: () -> Unit,
     onSetVolume: (Float) -> Unit,
     onThumbsUp: () -> Unit,
@@ -61,76 +71,91 @@ fun VoiceScreen(
     var input by rememberSaveable { mutableStateOf("") }
     var volume by rememberSaveable { mutableStateOf(1f) }
 
-    LazyColumn(
-        modifier = modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(horizontal = 24.dp, vertical = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp, alignment = Alignment.CenterVertically),
     ) {
-        item("status") {
-            StatusCard(status = status)
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Image(
+                painter = painterResource(id = R.drawable.elevenlabs_logo),
+                contentDescription = "ElevenLabs Logo",
+                modifier = Modifier
+                    .height(48.dp)
+                    .fillMaxWidth(0.7f),
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "Android Example App",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+        Spacer(Modifier.height(24.dp))
+
+        StatusCard(status)
+        Spacer(Modifier.height(24.dp))
+
+        Button(
+            onClick = onDisconnect,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Disconnect")
         }
 
         if (isConnected) {
-            item("mode") {
-                ModeIndicator(mode = mode)
+            ModeIndicator(mode = mode)
+
+            OutlinedButton(
+                onClick = onToggleMute,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(text = if (isMuted) "Unmute" else "Mute")
             }
 
-            item("mute") {
-                OutlinedButton(
-                    onClick = onToggleMute,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(text = if (isMuted) "Unmute" else "Mute")
-                }
-            }
-
-            item("volume") {
-                Column {
-                    Text(text = "Volume", style = MaterialTheme.typography.bodyMedium)
-                    Slider(
-                        value = volume,
-                        onValueChange = {
-                            volume = it
-                            onSetVolume(it)
-                        },
-                        valueRange = 0f..1f,
-                    )
-                }
-            }
-
-            item("feedback") {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedButton(
-                        onClick = onThumbsUp,
-                        enabled = canSendFeedback,
-                        modifier = Modifier.weight(1f),
-                    ) { Text("👍") }
-                    OutlinedButton(
-                        onClick = onThumbsDown,
-                        enabled = canSendFeedback,
-                        modifier = Modifier.weight(1f),
-                    ) { Text("👎") }
-                }
-            }
-
-            item("composer") {
-                MessageComposer(
-                    value = input,
-                    onValueChange = { input = it },
-                    onSendUser = {
-                        if (input.isNotBlank()) {
-                            onSendUserMessage(input)
-                            input = ""
-                        }
+            Column {
+                Text(text = "Volume", style = MaterialTheme.typography.bodyMedium)
+                Slider(
+                    value = volume,
+                    onValueChange = {
+                        volume = it
+                        onSetVolume(it)
                     },
-                    onSendContextual = {
-                        if (input.isNotBlank()) {
-                            onSendContextual(input)
-                            input = ""
-                        }
-                    },
+                    valueRange = 0f..1f,
                 )
             }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedButton(
+                    onClick = onThumbsUp,
+                    enabled = canSendFeedback,
+                    modifier = Modifier.weight(1f),
+                ) { Text("👍") }
+                OutlinedButton(
+                    onClick = onThumbsDown,
+                    enabled = canSendFeedback,
+                    modifier = Modifier.weight(1f),
+                ) { Text("👎") }
+            }
+
+            MessageComposer(
+                value = input,
+                onValueChange = { input = it },
+                onSendUser = {
+                    if (input.isNotBlank()) {
+                        onSendUserMessage(input)
+                        input = ""
+                    }
+                },
+                onSendContextual = {
+                    if (input.isNotBlank()) {
+                        onSendContextual(input)
+                        input = ""
+                    }
+                },
+            )
         }
     }
 }
@@ -146,9 +171,7 @@ private fun StatusCard(status: ConversationStatus) {
     }
     Box(
         modifier = Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))
-            .padding(16.dp),
+            .fillMaxWidth(),
         contentAlignment = Alignment.Center,
     ) {
         Text(text = "Status: $label", color = color, style = MaterialTheme.typography.bodyMedium)
@@ -206,12 +229,25 @@ private fun MessageComposer(
                 }
             },
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Button(onClick = onSendContextual, modifier = Modifier.weight(1f)) {
-                Text("Send contextual")
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.height(IntrinsicSize.Max),
+        ) {
+            Button(
+                onClick = onSendContextual,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
+            ) {
+                Text("Send contextual message", textAlign = TextAlign.Center)
             }
-            Button(onClick = onSendUser, modifier = Modifier.weight(1f)) {
-                Text("Send user msg")
+            Button(
+                onClick = onSendUser,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
+            ) {
+                Text("Send user message", textAlign = TextAlign.Center)
             }
         }
     }
@@ -226,6 +262,7 @@ private fun VoiceScreenPreviewListening() {
             mode = ConversationMode.LISTENING,
             isMuted = false,
             canSendFeedback = true,
+            onDisconnect = {},
             onToggleMute = {},
             onSetVolume = {},
             onThumbsUp = {},
@@ -245,6 +282,7 @@ private fun VoiceScreenPreviewSpeakingMuted() {
             mode = ConversationMode.SPEAKING,
             isMuted = true,
             canSendFeedback = false,
+            onDisconnect = {},
             onToggleMute = {},
             onSetVolume = {},
             onThumbsUp = {},
@@ -264,6 +302,7 @@ private fun VoiceScreenPreviewConnecting() {
             mode = null,
             isMuted = false,
             canSendFeedback = false,
+            onDisconnect = {},
             onToggleMute = {},
             onSetVolume = {},
             onThumbsUp = {},

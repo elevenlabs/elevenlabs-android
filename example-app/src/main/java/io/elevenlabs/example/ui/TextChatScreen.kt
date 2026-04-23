@@ -29,6 +29,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Send
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -50,21 +55,24 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.elevenlabs.example.models.TextChatMessage
-import io.elevenlabs.example.models.TextChatState
 import io.elevenlabs.models.ConversationStatus
 
 private const val MAX_INPUT_LENGTH = 2000
 
 /**
  * Compose chat surface for text conversations. Header on top, scrolling message list in the
- * middle, pill composer pinned to the bottom. Hosted inside a tabbed single-activity shell, so
- * navigation is handled by the parent — there is no back/close affordance here.
+ * middle, pill composer pinned to the bottom. Owns its own Disconnect action — there is no
+ * shared header.
  */
 @Composable
 fun TextChatScreen(
-    state: TextChatState,
+    status: ConversationStatus,
+    messages: List<TextChatMessage>,
+    isAgentTyping: Boolean,
+    errorMessage: String?,
     onSend: (String) -> Unit,
     onRetry: () -> Unit,
+    onDisconnect: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -76,25 +84,25 @@ fun TextChatScreen(
                 .fillMaxSize()
                 .imePadding(),
         ) {
-            ChatHeader(status = state.status)
+            ChatHeader(status = status, onDisconnect = onDisconnect)
 
-            if (state.status == ConversationStatus.ERROR && state.messages.isEmpty()) {
+            if (status == ConversationStatus.ERROR && messages.isEmpty()) {
                 ErrorState(
-                    message = state.errorMessage,
+                    message = errorMessage,
                     onRetry = onRetry,
                     modifier = Modifier.weight(1f),
                 )
             } else {
                 MessageList(
-                    messages = state.messages,
-                    isAgentTyping = state.isAgentTyping,
+                    messages = messages,
+                    isAgentTyping = isAgentTyping,
                     modifier = Modifier.weight(1f),
                 )
             }
 
             Composer(
                 onSend = onSend,
-                enabled = state.status == ConversationStatus.CONNECTED,
+                enabled = status == ConversationStatus.CONNECTED,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 12.dp),
@@ -104,22 +112,32 @@ fun TextChatScreen(
 }
 
 @Composable
-private fun ChatHeader(status: ConversationStatus) {
-    Column(
+private fun ChatHeader(
+    status: ConversationStatus,
+    onDisconnect: () -> Unit,
+) {
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(
-            text = "Chat",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onBackground,
-        )
-        Text(
-            text = statusLabel(status),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Column {
+            Text(
+                text = "Chat",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onBackground,
+            )
+            Text(
+                text = statusLabel(status),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Button(onClick = onDisconnect) {
+            Text("Disconnect")
+        }
     }
 }
 
@@ -239,7 +257,11 @@ private fun TypingDot(delayMillis: Int) {
         initialValue = 0.3f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 600, delayMillis = delayMillis, easing = LinearEasing),
+            animation = tween(
+                durationMillis = 600,
+                delayMillis = delayMillis,
+                easing = LinearEasing
+            ),
             repeatMode = RepeatMode.Reverse,
         ),
         label = "alpha",
@@ -318,9 +340,7 @@ private fun Composer(
                 disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
             ),
         ) {
-            // Triangle replacement for the arrow_up icon — using a unicode glyph keeps the demo
-            // dependency-free.
-            Text(text = "↑", fontSize = 18.sp)
+            Icon(imageVector = Icons.AutoMirrored.Filled.Send, contentDescription = null)
         }
     }
 }
@@ -363,16 +383,20 @@ private fun statusLabel(status: ConversationStatus): String = when (status) {
 private fun TextChatScreenPreview() {
     AppTheme {
         TextChatScreen(
-            state = TextChatState(
-                status = ConversationStatus.CONNECTED,
-                messages = listOf(
-                    TextChatMessage(1, "Hello, what can you do?", isFromUser = true),
-                    TextChatMessage(2, "I can help you explore ElevenLabs Conversational AI.", isFromUser = false),
+            status = ConversationStatus.CONNECTED,
+            messages = listOf(
+                TextChatMessage(1, "Hello, what can you do?", isFromUser = true),
+                TextChatMessage(
+                    2,
+                    "I can help you explore ElevenLabs Conversational AI.",
+                    isFromUser = false
                 ),
-                isAgentTyping = true,
             ),
+            isAgentTyping = true,
+            errorMessage = null,
             onSend = {},
             onRetry = {},
+            onDisconnect = {},
         )
     }
 }
