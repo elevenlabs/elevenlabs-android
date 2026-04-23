@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Main theme: pinned to Light (no auto dark-mode flip), pure white system bars with dark
          icons so they read against the white background. -->
     <style name="Theme.ElevenLabsConversationalAISDK" parent="Theme.MaterialComponents.Light.NoActionBar">
@@ -16,11 +16,12 @@
         <item name="colorOnSurface">@color/on_surface</item>
         <item name="colorOnError">@color/on_error</item>
 
-        <!-- System bars -->
+        <!-- System bars. Light variants are silently ignored on API levels below their minimum,
+             so it's safe to declare them here for the pre-v23 default theme. -->
         <item name="android:statusBarColor">@color/background</item>
         <item name="android:navigationBarColor">@color/background</item>
-        <item name="android:windowLightStatusBar">true</item>
-        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="m">true</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">true</item>
     </style>
 
     <!-- Alternative fallback theme for older devices -->
