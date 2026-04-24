@@ -2,6 +2,7 @@ package io.elevenlabs.audio
 
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import io.elevenlabs.MutedSpeechEvent
 import io.livekit.android.audio.AudioProcessorInterface
 import java.nio.ByteBuffer
@@ -84,15 +85,10 @@ class SoftwareMuteProcessor internal constructor(
         synchronized(lock) {
             if (levelActive) {
                 consecutiveBelowCount = 0
-                consecutiveAboveCount += 1
-                if (consecutiveAboveCount >= BUFFERS_ABOVE_TO_CONFIRM) hangoverLatched = true
+                if (++consecutiveAboveCount >= BUFFERS_ABOVE_TO_CONFIRM) hangoverLatched = true
             } else {
                 consecutiveAboveCount = 0
-                consecutiveBelowCount += 1
-                if (consecutiveBelowCount >= BUFFERS_BELOW_TO_CLEAR) {
-                    hangoverLatched = false
-                    consecutiveBelowCount = 0
-                }
+                if (++consecutiveBelowCount >= BUFFERS_BELOW_TO_CLEAR) hangoverLatched = false
             }
 
             val now = System.currentTimeMillis()
@@ -106,7 +102,11 @@ class SoftwareMuteProcessor internal constructor(
         if (shouldFire) {
             val level = fireLevel
             dispatchMutedSpeech {
-                try { onMutedSpeech?.invoke(MutedSpeechEvent(audioLevel = level)) } catch (_: Throwable) {}
+                try { 
+                    onMutedSpeech?.invoke(MutedSpeechEvent(audioLevel = level)) 
+                } catch (e: Exception) { 
+                    Log.e("SoftwareMuteProcessor", "onMutedSpeech callback threw: ${e.message}", e) 
+                }
             }
         }
 
