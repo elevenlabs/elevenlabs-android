@@ -9,19 +9,22 @@ import io.elevenlabs.models.DisconnectionDetails
  * Configuration class for conversation sessions
  *
  * This class defines the parameters needed to start a conversation with an ElevenLabs agent.
- * It supports two distinct authentication modes:
+ * Exactly one of [agentId], [conversationToken], or [signedUrl] must be provided.
  *
  * **Public Agents** (no authentication required):
- * - Use `agentId` only
- * - SDK automatically generates conversation token
- * - No API key needed
+ * - Use `agentId` only — works in both voice and text-only mode.
+ * - SDK fetches the per-session token from the public endpoint.
  *
- * **Private Agents** (backend authentication required):
- * - Use `conversationToken` only (generated on your backend with API key)
- * - API key should never be in client-side applications
+ * **Private Agents — voice (LiveKit/WebRTC):**
+ * - Use `conversationToken`, generated on your backend with your API key.
  *
- * @param agentId Agent identifier for public agents (mutually exclusive with conversationToken)
- * @param conversationToken Pre-generated token for private agents (mutually exclusive with agentId)
+ * **Private Agents — text-only (raw WebSocket):**
+ * - Use `signedUrl`, returned by your backend's call to
+ *   `/v1/convai/conversation/get-signed-url`. The SDK opens it verbatim.
+ *
+ * @param agentId Agent identifier for public agents
+ * @param conversationToken Pre-generated WebRTC token for private voice agents
+ * @param signedUrl Pre-signed WebSocket URL for private text-only agents
  * @param userId Optional user identifier for conversation tracking
  * @param textOnly Whether to use text-only mode (true) or voice mode (false, default)
  * @param audioInputSampleRate Sample rate for audio recording in Hz (default: 48000 for high quality)
@@ -32,6 +35,7 @@ import io.elevenlabs.models.DisconnectionDetails
 data class ConversationConfig(
     val agentId: String? = null,
     val conversationToken: String? = null,
+    val signedUrl: String? = null,
     val userId: String? = null,
     val textOnly: Boolean = false,
     val audioInputSampleRate: Int = 48000,
@@ -63,31 +67,23 @@ data class ConversationConfig(
 
 ) {
     init {
-        // Validation: agentId should not be empty if provided
-        agentId?.let { id ->
-            require(id.isNotBlank()) {
-                "agentId cannot be blank"
+        agentId?.let { require(it.isNotBlank()) { "agentId cannot be blank" } }
+        conversationToken?.let { require(it.isNotBlank()) { "conversationToken cannot be blank" } }
+        signedUrl?.let {
+            require(it.isNotBlank()) { "signedUrl cannot be blank" }
+            require(it.startsWith("ws://") || it.startsWith("wss://")) {
+                "signedUrl must be a ws:// or wss:// URL"
             }
         }
 
-        // Validation: conversationToken should not be empty if provided
-        conversationToken?.let { token ->
-            require(token.isNotBlank()) {
-                "conversationToken cannot be blank"
-            }
-        }
-
-        // Validation: audioInputSampleRate should be a valid audio sample rate
         require(audioInputSampleRate in listOf(8000, 16000, 22050, 44100, 48000)) {
             "audioInputSampleRate must be a standard sample rate (8000, 16000, 22050, 44100, 48000 Hz)"
         }
     }
 
-    /**
-     * Returns true if this configuration is for a private agent
-     */
+    /** True when the session authenticates with a backend-generated credential. */
     val isPrivateAgent: Boolean
-        get() = conversationToken != null
+        get() = conversationToken != null || signedUrl != null
 }
 
 data class Overrides(

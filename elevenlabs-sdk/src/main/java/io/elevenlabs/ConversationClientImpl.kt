@@ -5,8 +5,10 @@ import android.util.Log
 import io.elevenlabs.BuildConfig
 import io.elevenlabs.audio.AudioSessionManager
 import io.elevenlabs.audio.LiveKitAudioManager
+import io.elevenlabs.audio.NoOpAudioManager
 import io.elevenlabs.network.TokenService
 import io.elevenlabs.network.WebRTCConnection
+import io.elevenlabs.network.WebSocketConnection
 import io.elevenlabs.ConversationSession
 import io.elevenlabs.ConversationConfig
 import io.livekit.android.LiveKit
@@ -32,10 +34,22 @@ internal object ConversationClientImpl {
         config: ConversationConfig,
         context: Context
     ): ConversationSession {
-
-        // Validate configuration
         validateConfig(config)
+        return if (config.textOnly) {
+            startTextOnlySession(config, context)
+        } else {
+            startVoiceSession(config, context)
+        }
+    }
 
+    /**
+     * Start a voice session over LiveKit/WebRTC. Uses the existing token-fetch +
+     * room creation path.
+     */
+    private suspend fun startVoiceSession(
+        config: ConversationConfig,
+        context: Context
+    ): ConversationSession {
         // Generate token if needed for public agents
         val finalConfig = if (!config.isPrivateAgent) {
             val tokenService = TokenService(baseUrl = config.apiEndpoint)
@@ -63,44 +77,73 @@ internal object ConversationClientImpl {
         )
         Log.d("ConversationClient", "Created LiveKit room instance @${room.hashCode()}")
 
-        // Create connection with shared room (ensures consistent permission state)
         val connection = WebRTCConnection(context, room)
         Log.d("ConversationClient", "WebRTCConnection initialized")
 
-        // Create audio manager
         val audioSessionManager = AudioSessionManager(context)
         val audioManager = LiveKitAudioManager(context, room)
         Log.d("ConversationClient", "LiveKitAudioManager initialized")
 
-        // Create client tools registry from configuration
-        val toolRegistry = ClientToolRegistry()
-        finalConfig.clientTools.forEach { (name, tool) ->
-            try {
-                toolRegistry.registerTool(name, tool)
-            } catch (e: Exception) {
-                Log.d("ConversationClient", "Failed to register client tool '$name': ${e.message}")
-            }
-        }
+        val toolRegistry = buildToolRegistry(finalConfig)
 
-        // Configure audio session for conversation
-        if (!finalConfig.textOnly) {
-            audioSessionManager.configureForVoiceCall()
-        }
+        audioSessionManager.configureForVoiceCall()
 
-        // Create the session
         val session = ConversationSessionImpl(
             context = context,
             config = finalConfig,
             room = room,
             connection = connection,
             audioManager = audioManager,
-            toolRegistry = toolRegistry
+            toolRegistry = toolRegistry,
         )
 
-        // Automatically start the session
         session.start()
-
         return session
+    }
+
+    /**
+     * Start a text-only session over the ConvAI WebSocket transport.
+     *
+     * Skips LiveKit, audio session configuration, and the public-agent token fetch
+     * because the WebSocket endpoint takes the agent_id directly. Private agents
+     * pass a conversation signature via [ConversationConfig.conversationToken].
+     */
+    private suspend fun startTextOnlySession(
+        config: ConversationConfig,
+        context: Context
+    ): ConversationSession {
+        // No transport-specific validation needed: validateConfig() already enforces that public
+        // agents have agentId and private agents have conversationToken (which, for text-only,
+        // is the signed URL from /v1/convai/conversation/get-signed-url).
+        val connection = WebSocketConnection()
+        Log.d("ConversationClient", "WebSocketConnection initialized for text-only session")
+
+        val audioManager = NoOpAudioManager()
+        val toolRegistry = buildToolRegistry(config)
+
+        val session = ConversationSessionImpl(
+            context = context,
+            config = config,
+            room = null,
+            connection = connection,
+            audioManager = audioManager,
+            toolRegistry = toolRegistry,
+        )
+
+        session.start()
+        return session
+    }
+
+    private fun buildToolRegistry(config: ConversationConfig): ClientToolRegistry {
+        val registry = ClientToolRegistry()
+        config.clientTools.forEach { (name, tool) ->
+            try {
+                registry.registerTool(name, tool)
+            } catch (e: Exception) {
+                Log.d("ConversationClient", "Failed to register client tool '$name': ${e.message}")
+            }
+        }
+        return registry
     }
 
     /**
@@ -110,12 +153,24 @@ internal object ConversationClientImpl {
      * @throws IllegalArgumentException if configuration is invalid
      */
     private fun validateConfig(config: ConversationConfig) {
-        if (config.isPrivateAgent && config.conversationToken.isNullOrBlank()) {
-            throw IllegalArgumentException("Private agent requires a valid conversation token")
+        val provided = listOfNotNull(
+            config.agentId.takeUnless { it.isNullOrBlank() }?.let { "agentId" },
+            config.conversationToken.takeUnless { it.isNullOrBlank() }?.let { "conversationToken" },
+            config.signedUrl.takeUnless { it.isNullOrBlank() }?.let { "signedUrl" },
+        )
+        require(provided.size == 1) {
+            "ConversationConfig requires exactly one of agentId / conversationToken / signedUrl, " +
+                "got $provided"
         }
 
-        if (!config.isPrivateAgent && config.agentId.isNullOrBlank()) {
-            throw IllegalArgumentException("Public agent requires a valid agent ID")
+        if (config.textOnly) {
+            require(config.conversationToken.isNullOrBlank()) {
+                "Text-only sessions use signedUrl (private) or agentId (public), not conversationToken"
+            }
+        } else {
+            require(config.signedUrl.isNullOrBlank()) {
+                "Voice sessions use conversationToken (private) or agentId (public), not signedUrl"
+            }
         }
     }
 

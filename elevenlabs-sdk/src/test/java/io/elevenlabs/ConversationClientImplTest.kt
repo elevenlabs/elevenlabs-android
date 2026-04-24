@@ -63,10 +63,11 @@ class ConversationClientImplTest {
     }
 
     @Test
-    fun `validateConfig throws exception for private agent with null token`() {
+    fun `validateConfig requires exactly one credential`() {
         val config = ConversationConfig(
             conversationToken = null,
-            agentId = null
+            agentId = null,
+            signedUrl = null,
         )
 
         val exception = assertThrows(IllegalArgumentException::class.java) {
@@ -75,14 +76,14 @@ class ConversationClientImplTest {
             }
         }
 
-        assertEquals("Public agent requires a valid agent ID", exception.message)
+        assertTrue(exception.message!!.contains("exactly one of agentId / conversationToken / signedUrl"))
     }
 
     @Test
-    fun `validateConfig throws exception for public agent without agentId`() {
+    fun `validateConfig rejects multiple credentials`() {
         val config = ConversationConfig(
-            agentId = null,
-            conversationToken = null
+            agentId = "agent-xyz",
+            conversationToken = "tok",
         )
 
         val exception = assertThrows(IllegalArgumentException::class.java) {
@@ -91,7 +92,39 @@ class ConversationClientImplTest {
             }
         }
 
-        assertEquals("Public agent requires a valid agent ID", exception.message)
+        assertTrue(exception.message!!.contains("exactly one of"))
+    }
+
+    @Test
+    fun `validateConfig rejects conversationToken in text-only mode`() {
+        val config = ConversationConfig(
+            conversationToken = "tok",
+            textOnly = true,
+        )
+
+        val exception = assertThrows(IllegalArgumentException::class.java) {
+            runTest {
+                ConversationClientImpl.startSession(config, mockContext)
+            }
+        }
+
+        assertTrue(exception.message!!.contains("Text-only sessions"))
+    }
+
+    @Test
+    fun `validateConfig rejects signedUrl in voice mode`() {
+        val config = ConversationConfig(
+            signedUrl = "wss://example.com/v1/convai/conversation?signature=x",
+            textOnly = false,
+        )
+
+        val exception = assertThrows(IllegalArgumentException::class.java) {
+            runTest {
+                ConversationClientImpl.startSession(config, mockContext)
+            }
+        }
+
+        assertTrue(exception.message!!.contains("Voice sessions"))
     }
 
     @Test
@@ -212,5 +245,52 @@ class ConversationClientImplTest {
 
         assertNotNull(builder)
         assertTrue(builder is ConversationSessionBuilder)
+    }
+
+    @Test
+    fun `text-only session skips LiveKit and TokenService`() = runTest {
+        mockkObject(io.livekit.android.LiveKit)
+        mockkConstructor(TokenService::class)
+        mockkConstructor(io.elevenlabs.network.WebSocketConnection::class)
+        mockkConstructor(ConversationSessionImpl::class)
+        coEvery { anyConstructed<ConversationSessionImpl>().start() } just Runs
+
+        val config = ConversationConfig(
+            agentId = "agent-xyz",
+            textOnly = true
+        )
+
+        val result = ConversationClientImpl.startSession(config, mockContext)
+
+        assertNotNull(result)
+        verify(exactly = 0) {
+            io.livekit.android.LiveKit.create(any(), any())
+        }
+        coVerify(exactly = 0) {
+            anyConstructed<TokenService>().fetchPublicAgentToken(any(), any(), any(), any())
+        }
+    }
+
+    @Test
+    fun `text-only session accepts signedUrl without agentId`() = runTest {
+        mockkObject(io.livekit.android.LiveKit)
+        mockkConstructor(TokenService::class)
+        mockkConstructor(io.elevenlabs.network.WebSocketConnection::class)
+        mockkConstructor(ConversationSessionImpl::class)
+        coEvery { anyConstructed<ConversationSessionImpl>().start() } just Runs
+
+        val config = ConversationConfig(
+            agentId = null,
+            signedUrl = "wss://api.elevenlabs.io/v1/convai/conversation?agent_id=X&conversation_signature=SIG",
+            textOnly = true,
+        )
+
+        val result = ConversationClientImpl.startSession(config, mockContext)
+
+        assertNotNull(result)
+        verify(exactly = 0) { io.livekit.android.LiveKit.create(any(), any()) }
+        coVerify(exactly = 0) {
+            anyConstructed<TokenService>().fetchPublicAgentToken(any(), any(), any(), any())
+        }
     }
 }

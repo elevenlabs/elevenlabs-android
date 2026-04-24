@@ -23,7 +23,7 @@ import kotlinx.coroutines.flow.StateFlow
 internal class ConversationSessionImpl(
     private val context: Context,
     private val config: ConversationConfig,
-    private val room: Room,
+    private val room: Room? = null,
     private val connection: BaseConnection,
     private val audioManager: AudioManager,
     private val toolRegistry: ClientToolRegistry
@@ -117,9 +117,9 @@ internal class ConversationSessionImpl(
                 _status.value = connectionState.toConversationStatus()
             }
 
-            // Start the connection
-            val serverUrl = config.websocketUrl
-            val token = config.conversationToken ?: ""
+            // Text-only sessions use the ConvAI WebSocket endpoint, which lives on the same host
+            // as the REST API; voice sessions use the LiveKit signaling URL.
+            val serverUrl = if (config.textOnly) config.apiEndpoint else config.websocketUrl
             Log.d("ConversationSession", "Starting connection to $serverUrl")
             // Wrap onConnect to capture conversationId while preserving user's callback
             val originalOnConnect = config.onConnect
@@ -130,7 +130,7 @@ internal class ConversationSessionImpl(
                 }
             )
 
-            connection.connect(token, serverUrl, wrappedConfig)
+            connection.connect(serverUrl, wrappedConfig)
 
             // Ensure audio starts only after room is connected (addresses LK permission ordering)
             if (!config.textOnly) {
