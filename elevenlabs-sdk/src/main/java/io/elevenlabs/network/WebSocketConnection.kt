@@ -21,6 +21,7 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import okio.ByteString
 import org.json.JSONObject
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * WebSocket transport for ElevenLabs Conversational AI.
@@ -48,8 +49,7 @@ class WebSocketConnection(
     private val messageChannel = Channel<String>(Channel.UNLIMITED)
     private var messageJob: Job? = null
 
-    @Volatile
-    private var disconnectCallbackInvoked = false
+    private val disconnectCallbackInvoked = AtomicBoolean(false)
 
     @Volatile
     private var conversationIdNotified = false
@@ -62,7 +62,7 @@ class WebSocketConnection(
         try {
             updateConnectionState(ConnectionState.CONNECTING)
             latestConfig = config
-            disconnectCallbackInvoked = false
+            disconnectCallbackInvoked.set(false)
             conversationIdNotified = false
 
             val url = buildWebSocketUrl(serverUrl, token, config.agentId)
@@ -89,7 +89,6 @@ class WebSocketConnection(
             webSocket?.close(NORMAL_CLOSURE, "client closed")
             webSocket = null
 
-            disconnectCallbackInvoked = false
             updateConnectionState(ConnectionState.IDLE)
             Log.d("WebSocketConnection", "Disconnected and reset to IDLE state")
         } catch (e: Exception) {
@@ -239,8 +238,7 @@ class WebSocketConnection(
     }
 
     private fun invokeOnDisconnect(details: DisconnectionDetails) {
-        if (disconnectCallbackInvoked) return
-        disconnectCallbackInvoked = true
+        if (!disconnectCallbackInvoked.compareAndSet(false, true)) return
         try {
             latestConfig?.onDisconnect?.invoke(details)
         } catch (t: Throwable) {
