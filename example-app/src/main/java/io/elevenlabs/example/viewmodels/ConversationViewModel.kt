@@ -71,7 +71,7 @@ class ConversationViewModel(application: Application) : AndroidViewModel(applica
 
     private var nextMessageId: Long = 1L
 
-    fun startConversation(activityContext: Context, textOnly: Boolean = true) {
+    fun startConversation(activityContext: Context, textOnly: Boolean) {
         if (currentSession != null && _uiState.value != UiState.Idle && _uiState.value !is UiState.Error) {
             Log.d(TAG, "Session already active or connecting.")
             return
@@ -86,7 +86,7 @@ class ConversationViewModel(application: Application) : AndroidViewModel(applica
         viewModelScope.launch {
             try {
                 val config = io.elevenlabs.ConversationConfig(
-                    agentId = "agent_6401kpqeaxxpf4asyaggk74qqqmz", // Replace with your agent ID
+                    agentId = "<your_agent_id>", // Replace with your agent ID
                     conversationToken = null,
                     userId = "demo-user",
                     textOnly = textOnly,
