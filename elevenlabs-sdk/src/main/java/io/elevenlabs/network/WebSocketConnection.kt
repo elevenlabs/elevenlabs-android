@@ -54,7 +54,7 @@ class WebSocketConnection(
     @Volatile
     private var conversationIdNotified = false
 
-    override suspend fun connect(token: String, serverUrl: String, config: ConversationConfig) {
+    override suspend fun connect(serverUrl: String, config: ConversationConfig) {
         if (connectionState != ConnectionState.IDLE && connectionState != ConnectionState.DISCONNECTED) {
             throw IllegalStateException("Already connected or connecting")
         }
@@ -65,7 +65,7 @@ class WebSocketConnection(
             disconnectCallbackInvoked.set(false)
             conversationIdNotified = false
 
-            val url = buildWebSocketUrl(serverUrl, token, config.agentId)
+            val url = buildWebSocketUrl(serverUrl, config.signedUrl, config.agentId)
             Log.d("WebSocketConnection", "Connecting to $url")
 
             val request = Request.Builder().url(url).build()
@@ -250,21 +250,19 @@ class WebSocketConnection(
         private const val WS_PATH = "/v1/convai/conversation"
         private const val NORMAL_CLOSURE = 1000
 
-        internal fun buildWebSocketUrl(serverUrl: String, token: String, agentId: String?): String {
-            // Private agent: token is the signed URL returned by
-            // /v1/convai/conversation/get-signed-url — opened verbatim.
-            if (token.isNotBlank()) {
-                require(token.startsWith("ws://") || token.startsWith("wss://")) {
-                    "conversationToken for text-only mode must be the signed WebSocket URL " +
-                        "from /v1/convai/conversation/get-signed-url"
+        internal fun buildWebSocketUrl(serverUrl: String, signedUrl: String?, agentId: String?): String {
+            // Private agent: open the backend-issued signed URL verbatim.
+            if (!signedUrl.isNullOrBlank()) {
+                require(signedUrl.startsWith("ws://") || signedUrl.startsWith("wss://")) {
+                    "signedUrl must be a ws:// or wss:// URL"
                 }
-                return token
+                return signedUrl
             }
 
             // Public agent: build the URL from agentId. The ConvAI WebSocket lives on the same
             // host as the REST API, so accept either an https:// or wss:// serverUrl.
             require(!agentId.isNullOrBlank()) {
-                "WebSocket connection requires either agentId (public) or conversationToken (private)"
+                "WebSocket connection requires either signedUrl (private) or agentId (public)"
             }
             val base = serverUrl
                 .replaceFirst("https://", "wss://")

@@ -12,14 +12,16 @@ import io.elevenlabs.models.DisconnectionDetails
 abstract class BaseConnection {
 
     /**
-     * Establish a connection using the provided token and server URL
+     * Establish a connection. Each transport reads its own credential from [config]:
+     * WebRTC uses [ConversationConfig.conversationToken], WebSocket uses
+     * [ConversationConfig.signedUrl] (or builds a public-agent URL from
+     * [ConversationConfig.agentId]).
      *
-     * @param token Authentication token for the connection
      * @param serverUrl URL of the server to connect to
      * @param config Conversation configuration
      * @throws RuntimeException if connection fails
      */
-    abstract suspend fun connect(token: String, serverUrl: String, config: ConversationConfig)
+    abstract suspend fun connect(serverUrl: String, config: ConversationConfig)
 
     /**
      * Disconnect from the server and clean up resources

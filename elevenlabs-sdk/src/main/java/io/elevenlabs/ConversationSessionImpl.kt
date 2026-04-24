@@ -120,7 +120,6 @@ internal class ConversationSessionImpl(
             // Text-only sessions use the ConvAI WebSocket endpoint, which lives on the same host
             // as the REST API; voice sessions use the LiveKit signaling URL.
             val serverUrl = if (config.textOnly) config.apiEndpoint else config.websocketUrl
-            val token = config.conversationToken ?: ""
             Log.d("ConversationSession", "Starting connection to $serverUrl")
             // Wrap onConnect to capture conversationId while preserving user's callback
             val originalOnConnect = config.onConnect
@@ -131,7 +130,7 @@ internal class ConversationSessionImpl(
                 }
             )
 
-            connection.connect(token, serverUrl, wrappedConfig)
+            connection.connect(serverUrl, wrappedConfig)
 
             // Ensure audio starts only after room is connected (addresses LK permission ordering)
             if (!config.textOnly) {

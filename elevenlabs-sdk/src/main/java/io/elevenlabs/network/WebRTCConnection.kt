@@ -58,11 +58,15 @@ class WebRTCConnection(
     private var audioLevelJob: Job? = null
 
     /**
-     * Connect to LiveKit room using the provided token and server URL
+     * Connect to LiveKit room using the WebRTC token from [config] and the given server URL.
      */
-    override suspend fun connect(token: String, serverUrl: String, config: ConversationConfig) {
+    override suspend fun connect(serverUrl: String, config: ConversationConfig) {
         if (connectionState != ConnectionState.IDLE && connectionState != ConnectionState.DISCONNECTED) {
             throw IllegalStateException("Already connected or connecting")
+        }
+
+        val token = requireNotNull(config.conversationToken?.takeIf { it.isNotBlank() }) {
+            "WebRTC connection requires a non-blank conversationToken"
         }
 
         try {
