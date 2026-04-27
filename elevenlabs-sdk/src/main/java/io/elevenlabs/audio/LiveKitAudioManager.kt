@@ -18,7 +18,8 @@ import kotlinx.coroutines.flow.StateFlow
  */
 class LiveKitAudioManager(
     private val context: Context,
-    private val room: Room
+    private val room: Room,
+    private val softwareMuteProcessor: SoftwareMuteProcessor? = null
 ) : AudioManager {
 
     private var localAudioTrack: LocalAudioTrack? = null
@@ -119,13 +120,21 @@ class LiveKitAudioManager(
 
     override suspend fun setMicMuted(muted: Boolean) {
         try {
-            AudioUtils.setMicrophoneMuted(context, muted)
-
+            softwareMuteProcessor?.setMuted(muted) ?: AudioUtils.setMicrophoneMuted(context, muted)
             _isMuted.value = muted
             audioStateListener?.onMuteStateChanged(muted)
-
         } catch (e: Exception) {
             audioStateListener?.onAudioError("Failed to set mute state", e)
+        }
+    }
+
+    override suspend fun setMicrophoneMuted(muted: Boolean) {
+        try {
+            AudioUtils.setMicrophoneMuted(context, muted)
+            _isMuted.value = muted
+            audioStateListener?.onMuteStateChanged(muted)
+        } catch (e: Exception) {
+            audioStateListener?.onAudioError("Failed to set microphone mute state", e)
         }
     }
 

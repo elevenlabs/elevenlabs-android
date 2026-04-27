@@ -115,6 +115,13 @@ interface ConversationSession {
     suspend fun setMicMuted(muted: Boolean)
 
     /**
+     * Mute the microphone at the OS/track level
+     *
+     * @param muted true to mute, false to unmute
+     */
+    suspend fun setMicrophoneMuted(muted: Boolean)
+
+    /**
      * Set the playback volume
      *
      * @param volume Volume level from 0.0 (silent) to 1.0 (maximum)

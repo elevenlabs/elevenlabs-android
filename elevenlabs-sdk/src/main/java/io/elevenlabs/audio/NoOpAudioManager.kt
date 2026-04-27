@@ -23,6 +23,8 @@ class NoOpAudioManager : AudioManager {
 
     override suspend fun setMicMuted(muted: Boolean) {}
 
+    override suspend fun setMicrophoneMuted(muted: Boolean) {}
+
     override fun isMuted(): Boolean = false
 
     override fun setVolume(volume: Float) {

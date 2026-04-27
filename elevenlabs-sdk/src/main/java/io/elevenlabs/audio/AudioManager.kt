@@ -39,6 +39,12 @@ interface AudioManager {
     suspend fun setMicMuted(muted: Boolean)
 
     /**
+     * Mute the microphone at the OS/track level
+     * @param muted true to mute, false to unmute
+     */
+    suspend fun setMicrophoneMuted(muted: Boolean)
+
+    /**
      * Check if the microphone is currently muted
      * @return true if muted, false if unmuted
      */

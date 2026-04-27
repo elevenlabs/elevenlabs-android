@@ -10,10 +10,15 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -22,8 +27,14 @@ import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import io.elevenlabs.example.ui.AppTheme
 import io.elevenlabs.example.ui.StartScreen
 import io.elevenlabs.example.ui.TextChatScreen
@@ -73,6 +84,7 @@ private fun AppRoot(viewModel: ConversationViewModel) {
     val isMuted by viewModel.isMuted.observeAsState(false)
     val canSendFeedback by viewModel.canSendFeedback.observeAsState(false)
     val errorMessage by viewModel.errorMessage.observeAsState()
+    val mutedSpeechEvent by viewModel.mutedSpeechEvent.observeAsState()
     val messages by viewModel.messages.collectAsState()
     val isAgentTyping by viewModel.isAgentTyping.collectAsState()
 
@@ -103,6 +115,14 @@ private fun AppRoot(viewModel: ConversationViewModel) {
         val msg = errorMessage ?: return@LaunchedEffect
         Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
         viewModel.clearError()
+    }
+
+    // Auto-dismiss the muted-speech banner after 4s if the user doesn't tap it.
+    LaunchedEffect(mutedSpeechEvent) {
+        if (mutedSpeechEvent != null) {
+            delay(4_000L)
+            viewModel.clearMutedSpeechEvent()
+        }
     }
 
     // Stay on the start screen until the session is fully CONNECTED. DISCONNECTING is treated as
@@ -152,6 +172,44 @@ private fun AppRoot(viewModel: ConversationViewModel) {
                 onSendUserMessage = { viewModel.sendUserMessage(it) },
             )
         }
+
+        // Tappable "you appear to be speaking while muted" banner. Surfaced as a top overlay so it
+        // floats above the active screen rather than living inside any single one.
+        if (mutedSpeechEvent != null && (isMuted ?: false) &&
+            effectiveStatus == ConversationStatus.CONNECTED && !textOnlyMode) {
+            MutedSpeechBanner(
+                modifier = Modifier.align(Alignment.TopCenter),
+                onTap = {
+                    viewModel.toggleMute()
+                    viewModel.clearMutedSpeechEvent()
+                },
+            )
+        }
+    }
+}
+
+private val MutedSpeechBannerColor = Color(0xFFF59E0B)
+
+@Composable
+private fun MutedSpeechBanner(
+    modifier: Modifier = Modifier,
+    onTap: () -> Unit,
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(MutedSpeechBannerColor)
+            .clickable(onClick = onTap)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = "You appear to be speaking. Tap to unmute.",
+            color = Color.White,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center,
+            style = MaterialTheme.typography.bodyMedium,
+        )
     }
 }
 

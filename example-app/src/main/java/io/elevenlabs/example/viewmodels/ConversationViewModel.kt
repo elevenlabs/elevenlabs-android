@@ -61,6 +61,14 @@ class ConversationViewModel(application: Application) : AndroidViewModel(applica
     private val _isMuted = MutableLiveData<Boolean>(false)
     val isMuted: LiveData<Boolean> = _isMuted
 
+    // Audio level in dB when speech is detected while muted; cleared by the observer.
+    private val _mutedSpeechEvent = MutableLiveData<Float?>()
+    val mutedSpeechEvent: LiveData<Float?> = _mutedSpeechEvent
+
+    fun clearMutedSpeechEvent() {
+        _mutedSpeechEvent.postValue(null)
+    }
+
     // Chat transcript — populated for both voice (via onUserTranscript / onAgentResponse) and
     // text-only (via sendUserMessage + onAgentResponse) sessions.
     private val _messages = MutableStateFlow<List<TextChatMessage>>(emptyList())
@@ -169,7 +177,13 @@ class ConversationViewModel(application: Application) : AndroidViewModel(applica
                     onError = { code, message ->
                         Log.e(TAG, "onError: Server error ($code): ${message ?: "unknown"}")
                         _errorMessage.postValue("Server error ($code): ${message ?: "unknown"}")
-                    }
+                    },
+                    audioConfiguration = io.elevenlabs.AudioPipelineConfiguration(
+                        useSoftwareMute = true,
+                        onMutedSpeech = { event ->
+                            _mutedSpeechEvent.postValue(event.audioLevel)
+                        },
+                    ),
                 )
 
                 val session = ConversationClient.startSession(config, activityContext)

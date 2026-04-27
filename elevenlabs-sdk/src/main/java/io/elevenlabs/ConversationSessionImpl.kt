@@ -221,6 +221,10 @@ internal class ConversationSessionImpl(
         audioManager.setMicMuted(muted)
     }
 
+    override suspend fun setMicrophoneMuted(muted: Boolean) {
+        audioManager.setMicrophoneMuted(muted)
+    }
+
     override fun setVolume(volume: Float) {
         audioManager.setVolume(volume)
     }
