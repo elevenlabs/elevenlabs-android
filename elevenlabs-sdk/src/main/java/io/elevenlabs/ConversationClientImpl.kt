@@ -67,7 +67,7 @@ internal object ConversationClientImpl {
         }
 
         val softwareMuteProcessor = finalConfig.audioConfiguration
-            ?.takeIf { it.useSoftwareMute == true }
+            ?.takeIf { it.useSoftwareMute }
             ?.let {
                 SoftwareMuteProcessor(
                     onMutedSpeech = it.onMutedSpeech,

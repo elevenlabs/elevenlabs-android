@@ -20,7 +20,7 @@ data class MutedSpeechEvent(val audioLevel: Float)
  * @param mutedSpeechThreshold Audio level in dB at which speech is detected. Defaults to -35 dB. Lower values are more sensitive.
  */
 data class AudioPipelineConfiguration(
-    val useSoftwareMute: Boolean? = null,
+    val useSoftwareMute: Boolean = false,
     val onMutedSpeech: ((event: MutedSpeechEvent) -> Unit)? = null,
     val mutedSpeechThreshold: Float? = null,
 )
