@@ -5,7 +5,8 @@ Official ElevenAgents SDK for Android.
 ### Features
 
 - Audio‑first, low‑latency sessions over LiveKit (WebRTC)
-- Public agents (token fetched client‑side from agentId) and private agents (pre‑issued conversationToken)
+- Text‑only sessions over the ConvAI WebSocket (no LiveKit, no mic permission)
+- Public agents (token fetched client‑side from `agentId`) and private agents (pre‑issued `conversationToken` for voice or `signedUrl` for text‑only)
 - Strongly‑typed events and callbacks (connect, messages, mode changes, feedback availability, unhandled client tools)
 - Data channel messaging (user message, contextual update, user activity/typing)
 - Feedback (like/dislike) associated with agent responses
@@ -51,7 +52,7 @@ dependencies {
 
 ## Permissions
 
-You have to request the `android.permission.RECORD_AUDIO` runtime permission yourself before starting a voice session.
+You have to request the `android.permission.RECORD_AUDIO` runtime permission yourself before starting a voice session. Text‑only sessions don't need this permission.
 
 Permissions (and a service) are added to your `AndroidManifest.xml` automatically by the LiveKit SDK.
 Certain ones are not needed to use the ElevenLabs SDK so you can remove them if don't need them:
@@ -76,9 +77,15 @@ Certain ones are not needed to use the ElevenLabs SDK so you can remove them if 
 
 ## Quick Start
 
-Start a conversation session with either:
-- Public agent: pass `agentId`
-- Private agent: pass `conversationToken` provisioned from your backend (never ship API keys).
+`ConversationConfig` requires exactly one of three credentials, depending on the agent and transport:
+
+| Agent | Transport | Field |
+| --- | --- | --- |
+| Public | Voice or text | `agentId` |
+| Private | Voice (LiveKit/WebRTC) | `conversationToken` |
+| Private | Text‑only (raw WebSocket) | `signedUrl` |
+
+Private credentials are provisioned by your backend — never ship API keys.
 
 ### Kotlin (Application/Activity)
 ```kotlin
@@ -90,7 +97,7 @@ import io.elevenlabs.ClientToolResult
 
 // Start a public agent session (token generated for you)
 val config = ConversationConfig(
-    agentId = "<your_public_agent_id>", // OR conversationToken = "<token>"
+    agentId = "<your_public_agent_id>", // OR conversationToken = "<token>" (voice) / signedUrl = "wss://…" (text-only)
     userId = "your-user-id",
     audioInputSampleRate = "48000", // Optional parameter, defaults to 48kHz. Lower values can help with audio input issues on slower connections
     apiEndpoint = "https://api.elevenlabs.io", // Optional: Custom API endpoint
@@ -186,7 +193,62 @@ session.endSession()
 ## Public vs Private Agents
 
 - **Public agents** (no auth): Initialize with `agentId` in `ConversationConfig`. The SDK requests a conversation token from ElevenLabs without needing an API key on device.
-- **Private agents** (auth): Initialize with `conversationToken` in `ConversationConfig`. Issued by your server (your backend uses the ElevenLabs API key). **Never embed API keys in clients.**
+- **Private agents — voice** (auth): Initialize with `conversationToken` in `ConversationConfig`. Your backend mints the WebRTC token via `/v1/convai/conversation/token?agent_id=…` using your API key.
+- **Private agents — text‑only** (auth): Initialize with `signedUrl` in `ConversationConfig`. Your backend signs a WebSocket URL via `/v1/convai/conversation/get-signed-url?agent_id=…` using your API key.
+
+**Never embed API keys in clients.** `ConversationConfig` enforces that exactly one credential is set, and that the credential matches the transport (`textOnly = true` → `signedUrl`, `textOnly = false` → `conversationToken`).
+
+---
+
+## Text‑only mode
+
+For text‑only conversations, set `textOnly = true` on `ConversationConfig`. The SDK switches transports automatically:
+
+- Voice mode (default) → LiveKit / WebRTC.
+- Text‑only mode → ConvAI WebSocket (`wss://api.elevenlabs.io/v1/convai/conversation`).
+
+The transport switch is required because LiveKit drops rooms that never publish an audio or video track, which would tear down a text‑only conversation after a few seconds. Text‑only sessions don't need `RECORD_AUDIO`.
+
+```kotlin
+val session = ConversationClient.startSession(
+    ConversationConfig(
+        agentId = "<your_public_agent_id>",
+        textOnly = true,
+        onAgentResponse = { reply -> /* render reply */ },
+    ),
+    this,
+)
+
+session.sendUserMessage("Hello!")
+```
+
+### Private agents in text‑only mode
+
+For private agents, pass the **signed WebSocket URL** returned by your backend's call to `/v1/convai/conversation/get-signed-url?agent_id=…` as `signedUrl`. The SDK opens it verbatim — no need to pass `agentId` separately.
+
+```kotlin
+val signedUrl = backendApi.fetchSignedUrl() // e.g., wss://api.elevenlabs.io/v1/convai/conversation?agent_id=…&conversation_signature=…
+
+val session = ConversationClient.startSession(
+    ConversationConfig(
+        signedUrl = signedUrl,
+        textOnly = true,
+    ),
+    this,
+)
+```
+
+### Custom regions / data residency
+
+The text‑only WebSocket lives on the same host as `apiEndpoint`, so data residency is honored automatically:
+
+```kotlin
+ConversationConfig(
+    agentId = "<your_public_agent_id>",
+    textOnly = true,
+    apiEndpoint = "https://api.eu.residency.elevenlabs.io",
+)
+```
 
 ---
 
