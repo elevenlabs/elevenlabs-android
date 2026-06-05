@@ -15,6 +15,7 @@ import io.elevenlabs.ConversationConfig
 import io.livekit.android.LiveKit
 import io.livekit.android.LiveKitOverrides
 import io.livekit.android.AudioOptions
+import io.livekit.android.AudioType
 import io.livekit.android.audio.AudioProcessorOptions
 
 /**
@@ -81,6 +82,11 @@ internal object ConversationClientImpl {
             appContext = context,
             overrides = LiveKitOverrides(
                 audioOptions = AudioOptions(
+                    audioOutputType = if (finalConfig.useMediaStream) {
+                        AudioType.MediaAudioType()
+                    } else {
+                        AudioType.CallAudioType()
+                    },
                     javaAudioDeviceModuleCustomizer = { builder ->
                         builder.setSampleRate(finalConfig.audioInputSampleRate)
                     },

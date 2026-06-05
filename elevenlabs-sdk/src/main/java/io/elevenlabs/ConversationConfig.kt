@@ -86,6 +86,7 @@ data class ConversationConfig(
     val onDisconnect: ((details: DisconnectionDetails) -> Unit)? = null,
     val onError: ((code: Int, message: String?) -> Unit)? = null,
     val audioConfiguration: AudioPipelineConfiguration? = null,
+    val useMediaStream: Boolean = false
 ) {
     init {
         agentId?.let { require(it.isNotBlank()) { "agentId cannot be blank" } }
