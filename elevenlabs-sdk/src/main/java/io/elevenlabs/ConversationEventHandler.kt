@@ -412,19 +412,16 @@ class ConversationEventHandler(
 
     // region Transcript reconciliation
     //
-    // Each transcript/response is reconciled against the tail of its role's messages by event id,
-    // so [messages] stays consistent for any input order:
-    //   - a newer event id than the role's last message starts a new message;
-    //   - a matching event id updates the existing message (per the rules below);
-    //   - an older, unmatched event id is ignored.
-    // Messages are only ever appended (never reordered), so the absolute order follows the arrival
-    // of finalized text, and per-role event ids stay ordered and unique. A missing ([null]) event
-    // id can't be ordered, so it's treated as belonging to a new message.
+    // Each transcript/response is matched against its role's messages by event id, so [messages] is
+    // consistent for any arrival order: a newer id appends a new message, a matching id updates the
+    // existing one, an older unmatched id is ignored. Messages are only appended (never reordered),
+    // so per-role event ids stay ordered and unique. A null event id can't be ordered and starts a
+    // new message.
 
     /**
-     * Streaming `agent_chat_response_part`: accumulates streamed text. A matching message is grown
-     * in place while still partial and finalized on [isStop]; a finalized message is never reopened.
-     * With no match, a part for a newer turn starts a fresh message and a stale one is ignored.
+     * Streaming `agent_chat_response_part`: appends text to the matching partial and finalizes it on
+     * [isStop]; a finalized message is never reopened. With no match, a newer turn starts a new
+     * message and a stale part is ignored.
      */
     private fun appendAgentResponsePart(text: String, eventId: Int?, isStop: Boolean) {
         _messages.update { current ->
@@ -446,8 +443,8 @@ class ConversationEventHandler(
 
     /**
      * `agent_response` / `agent_response_correction`: the canonical finalized response for a turn.
-     * Updates the matching message in place (even after it was finalized), appends when it belongs
-     * to a newer turn, and ignores a stale/unmatched event id.
+     * Overwrites the matching message in place (even if already finalized), appends for a newer turn,
+     * ignores a stale/unmatched event id.
      */
     private fun applyAgentResponse(content: String, eventId: Int?) {
         _messages.update { current ->
@@ -464,9 +461,8 @@ class ConversationEventHandler(
     }
 
     /**
-     * Finalized `user_transcript`: finalizes the matching in-progress partial, or appends when it
-     * belongs to a newer turn; then drops any leftover partial (a tentative that never produced its
-     * own final), so a final never leaves a stray partial bubble behind.
+     * Finalized `user_transcript`: finalizes the matching partial or appends for a newer turn, then
+     * drops any leftover user partial so a final never leaves a stray partial bubble behind.
      */
     private fun applyUserTranscript(content: String, eventId: Int?) {
         _messages.update { current ->
@@ -484,8 +480,8 @@ class ConversationEventHandler(
     }
 
     /**
-     * `tentative_user_transcript`: the in-progress user transcript. Supersedes any existing partial,
-     * then surfaces a fresh one if it belongs to a turn newer than the last finalized transcript.
+     * `tentative_user_transcript`: the in-progress user transcript. Replaces any existing partial,
+     * then re-adds it only if newer than the last finalized transcript.
      */
     private fun applyTentativeUserTranscript(content: String, eventId: Int?) {
         _messages.update { current ->
@@ -498,21 +494,37 @@ class ConversationEventHandler(
         }
     }
 
-    /** Index of the message for [role] carrying exactly [eventId], or null (never matches null ids). */
+    /**
+     * Index of [role]'s message with exactly [eventId], or null (null ids never match).
+     *
+     * Scans from the tail and stops at the first same-role id below [eventId]: a role's ids rise with
+     * position, so the target can't be further back. This keeps the hot paths O(1) — updating the
+     * latest message or appending a newer one. Null-id local messages (typed sends) carry no order
+     * and are skipped.
+     */
     private fun List<Message>.messageIndex(role: MessageRole, eventId: Int?): Int? {
         if (eventId == null) return null
-        val idx = indexOfFirst { it.role == role && it.eventId == eventId }
-        return if (idx >= 0) idx else null
+        for (i in lastIndex downTo 0) {
+            val candidate = this[i]
+            if (candidate.role != role) continue
+            val candidateId = candidate.eventId ?: continue
+            when {
+                candidateId == eventId -> return i
+                candidateId < eventId -> return null // ids rise with position; target is absent
+            }
+        }
+        return null
     }
 
     /**
-     * Whether [eventId] is newer than [role]'s most recent message. Messages are appended in arrival
-     * order, so the last message of a role carries its highest event id. A null incoming id (or a
-     * role whose last message has no id) can't be ordered and is treated as newer.
+     * Whether [eventId] is newer than [role]'s latest server-assigned message. The last id-carrying
+     * message of a role holds its highest event id. Null-id local messages (typed sends) are skipped
+     * so they can't make a stale transcript look newer. A null incoming id (or no id-carrying
+     * message) can't be ordered and is treated as newer.
      */
     private fun List<Message>.isNewerThanLastMessage(role: MessageRole, eventId: Int?): Boolean {
         if (eventId == null) return true
-        val lastEventId = lastOrNull { it.role == role }?.eventId ?: return true
+        val lastEventId = lastOrNull { it.role == role && it.eventId != null }?.eventId ?: return true
         return eventId > lastEventId
     }
 
