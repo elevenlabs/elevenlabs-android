@@ -1,11 +1,12 @@
 package io.elevenlabs.example.models
 
 /**
- * Lightweight chat message used by the text chat surface. Populated for both voice and text-only
- * sessions so the same transcript view can render either modality.
+ * Lightweight chat message used by the text chat surface, mapped from the SDK's reconciled
+ * transcript. [id] is the SDK message id, stable across partial/final updates so it works as a
+ * list key.
  */
 data class TextChatMessage(
-    val id: Long,
+    val id: String,
     val content: String,
     val isFromUser: Boolean,
 )

@@ -163,6 +163,7 @@ private fun AppRoot(viewModel: ConversationViewModel) {
                 mode = mode,
                 isMuted = isMuted ?: false,
                 canSendFeedback = canSendFeedback ?: false,
+                messages = messages,
                 onDisconnect = { viewModel.endConversation() },
                 onToggleMute = { viewModel.toggleMute() },
                 onSetVolume = { viewModel.setVolume(it) },

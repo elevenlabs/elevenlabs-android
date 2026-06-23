@@ -142,7 +142,7 @@ private fun ChatHeader(
 }
 
 @Composable
-private fun MessageList(
+internal fun MessageList(
     messages: List<TextChatMessage>,
     isAgentTyping: Boolean,
     modifier: Modifier = Modifier,
@@ -385,9 +385,9 @@ private fun TextChatScreenPreview() {
         TextChatScreen(
             status = ConversationStatus.CONNECTED,
             messages = listOf(
-                TextChatMessage(1, "Hello, what can you do?", isFromUser = true),
+                TextChatMessage("1", "Hello, what can you do?", isFromUser = true),
                 TextChatMessage(
-                    2,
+                    "2",
                     "I can help you explore ElevenLabs Conversational AI.",
                     isFromUser = false
                 ),
