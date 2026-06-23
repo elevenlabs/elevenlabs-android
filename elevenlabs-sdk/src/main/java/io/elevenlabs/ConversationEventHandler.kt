@@ -27,6 +27,11 @@ class ConversationEventHandler(
     private val onUserTranscript: ((String) -> Unit)? = null,
     private val onAgentResponse: ((String) -> Unit)? = null,
     private val onAgentResponseCorrection: ((String, String) -> Unit)? = null,
+    private val onUserTranscriptEvent: ((String, Int?) -> Unit)? = null,
+    private val onTentativeUserTranscriptEvent: ((String, Int?) -> Unit)? = null,
+    private val onAgentResponseEvent: ((String, Int?) -> Unit)? = null,
+    private val onAgentResponsePartEvent: ((AgentResponsePartType, String, Int?) -> Unit)? = null,
+    private val onAgentResponseCorrectionEvent: ((String, Int?) -> Unit)? = null,
     private val onAgentToolResponse: ((String, String, String, Boolean) -> Unit)? = null,
     private val onConversationInitiationMetadata: ((String, String, String) -> Unit)? = null,
     private val onInterruption: ((Int) -> Unit)? = null,
@@ -85,6 +90,10 @@ class ConversationEventHandler(
     private suspend fun handleAgentChatResponsePart(event: ConversationEvent.AgentChatResponsePart) {
         appendAgentResponsePart(text = event.text, eventId = event.eventId, isStop = event.partType == "stop")
 
+        AgentResponsePartType.fromString(event.partType)?.let { partType ->
+            try { onAgentResponsePartEvent?.invoke(partType, event.text, event.eventId) } catch (_: Throwable) {}
+        }
+
         when (event.partType) {
             "start" -> {
                 _conversationMode.value = ConversationMode.SPEAKING
@@ -109,6 +118,7 @@ class ConversationEventHandler(
     private suspend fun handleTentativeUserTranscript(event: ConversationEvent.TentativeUserTranscript) {
         applyTentativeUserTranscript(content = event.userTranscript, eventId = event.eventId)
         try { onUserTranscript?.invoke(event.userTranscript) } catch (_: Throwable) {}
+        try { onTentativeUserTranscriptEvent?.invoke(event.userTranscript, event.eventId) } catch (_: Throwable) {}
     }
 
     /**
@@ -158,6 +168,11 @@ class ConversationEventHandler(
         } catch (e: Exception) {
             Log.e("ConvEventHandler", "Error in onAgentResponse callback: ${e.message}", e)
         }
+        try {
+            onAgentResponseEvent?.invoke(event.agentResponse, event.eventId)
+        } catch (e: Exception) {
+            Log.e("ConvEventHandler", "Error in onAgentResponseEvent callback: ${e.message}", e)
+        }
     }
 
     /**
@@ -170,6 +185,11 @@ class ConversationEventHandler(
         } catch (e: Exception) {
             Log.e("ConvEventHandler", "Error in onUserTranscript callback: ${e.message}", e)
         }
+        try {
+            onUserTranscriptEvent?.invoke(event.userTranscript, event.eventId)
+        } catch (e: Exception) {
+            Log.e("ConvEventHandler", "Error in onUserTranscriptEvent callback: ${e.message}", e)
+        }
     }
 
     private fun handleAgentResponseCorrection(event: ConversationEvent.AgentResponseCorrection) {
@@ -178,6 +198,11 @@ class ConversationEventHandler(
             onAgentResponseCorrection?.invoke(event.originalAgentResponse, event.correctedAgentResponse)
         } catch (e: Exception) {
             Log.e("ConvEventHandler", "Error in onAgentResponseCorrection callback: ${e.message}", e)
+        }
+        try {
+            onAgentResponseCorrectionEvent?.invoke(event.correctedAgentResponse, event.eventId)
+        } catch (e: Exception) {
+            Log.e("ConvEventHandler", "Error in onAgentResponseCorrectionEvent callback: ${e.message}", e)
         }
     }
 

@@ -131,13 +131,19 @@ val config = ConversationConfig(
         // Agent audio level (volume), range from 0.0 to 1.0
         // Log.d("MyApp", "Agent audio level: $level")
     },
-    onUserTranscript = { transcript ->
-        // User's speech transcribed to text
+    onUserTranscriptEvent = { text, eventId ->
+        // User's speech transcribed to text (finalized)
     },
-    onAgentResponse = { response ->
-        // Agent's text response
+    onTentativeUserTranscriptEvent = { text, eventId ->
+        // In-progress user transcript
     },
-    onAgentResponseCorrection = { originalResponse, correctedResponse ->
+    onAgentResponseEvent = { text, eventId ->
+        // Agent's finalized text response
+    },
+    onAgentResponsePartEvent = { partType, text, eventId ->
+        // Streaming agent text part: AgentResponsePartType.START / DELTA / STOP
+    },
+    onAgentResponseCorrectionEvent = { text, eventId ->
         // Agent response was corrected after interruption
     },
     onAgentToolResponse = { toolName, toolCallId, toolType, isError ->
@@ -214,7 +220,7 @@ val session = ConversationClient.startSession(
     ConversationConfig(
         agentId = "<your_public_agent_id>",
         textOnly = true,
-        onAgentResponse = { reply -> /* render reply */ },
+        onAgentResponseEvent = { reply, _ -> /* render reply */ },
     ),
     this,
 )
@@ -290,10 +296,14 @@ Both parameters are optional and default to the standard ElevenLabs production e
 
 ### Conversation Event Callbacks
 
-- **onUserTranscript(transcript: String)**: User's speech transcribed to text in real-time.
-- **onAgentResponse(response: String)**: Agent's text response before it's converted to speech.
-- **onAgentResponseCorrection(originalResponse: String, correctedResponse: String)**: Agent response was corrected after user interruption.
+- **onUserTranscriptEvent(text: String, eventId: Int?)**: Finalized user transcript for a turn, with its server event id.
+- **onTentativeUserTranscriptEvent(text: String, eventId: Int?)**: In-progress user transcript, updated as recognition refines.
+- **onAgentResponseEvent(text: String, eventId: Int?)**: Agent's finalized text response for a turn, with its server event id.
+- **onAgentResponsePartEvent(partType: AgentResponsePartType, text: String, eventId: Int?)**: Streaming agent text parts. `partType` is `START`, `DELTA`, or `STOP`.
+- **onAgentResponseCorrectionEvent(text: String, eventId: Int?)**: Corrected agent response (after user interruption), with its server event id.
 - **onInterruption(eventId: Int)**: User interrupted the agent while speaking.
+
+> **Deprecated:** `onUserTranscript(transcript: String)`, `onAgentResponse(response: String)`, and `onAgentResponseCorrection(originalResponse: String, correctedResponse: String)` are superseded by the `…Event` callbacks above, which also surface the server event id. They still fire for backward compatibility.
 
 ### Tool & Feedback Callbacks
 

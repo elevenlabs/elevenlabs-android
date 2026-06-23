@@ -146,20 +146,26 @@ class ConversationViewModel(application: Application) : AndroidViewModel(applica
                         // Commented out as it's quite noisy
                         // Log.d(TAG, "audioLevel: $level")
                     },
-                    onUserTranscript = { transcript ->
-                        Log.d(TAG, "onUserTranscript: $transcript")
+                    onUserTranscriptEvent = { transcript, eventId ->
+                        Log.d(TAG, "onUserTranscript: text='$transcript', eventId=$eventId")
+                    },
+                    onTentativeUserTranscriptEvent = { transcript, eventId ->
+                        Log.d(TAG, "onTentativeUserTranscript: text='$transcript', eventId=$eventId")
                     },
                     onAudioAlignment = { alignment ->
                         Log.d(TAG, "onAudioAlignment: $alignment")
                     },
-                    onAgentResponse = { response ->
-                        Log.d(TAG, "onAgentResponse: $response")
+                    onAgentResponseEvent = { response, eventId ->
+                        Log.d(TAG, "onAgentResponse: text='$response', eventId=$eventId")
+                    },
+                    onAgentResponsePartEvent = { partType, text, eventId ->
+                        Log.d(TAG, "onAgentResponsePart: partType=$partType, text='$text', eventId=$eventId")
                     },
                     onAgentResponseMetadata = { metadata ->
                         Log.d(TAG, "onAgentResponseMetadata: $metadata")
                     },
-                    onAgentResponseCorrection = { originalResponse, correctedResponse ->
-                        Log.d(TAG, "onAgentResponseCorrection: original='$originalResponse', corrected='$correctedResponse'")
+                    onAgentResponseCorrectionEvent = { correctedResponse, eventId ->
+                        Log.d(TAG, "onAgentResponseCorrection: corrected='$correctedResponse', eventId=$eventId")
                     },
                     onAgentToolResponse = { toolName, toolCallId, toolType, isError ->
                         Log.d(TAG, "onAgentToolResponse: tool=$toolName, callId=$toolCallId, type=$toolType, isError=$isError")
