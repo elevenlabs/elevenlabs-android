@@ -26,10 +26,15 @@ sealed class ConversationEvent {
     /**
      * Streaming agent chat response parts
      * type lifecycle: start -> delta... -> stop
+     *
+     * @param partType The part's position in the lifecycle ("start" | "delta" | "stop")
+     * @param text The text chunk for this part
+     * @param eventId Server event id used to correlate parts of the same streamed message
      */
     data class AgentChatResponsePart(
-        val partType: String, // "start" | "delta" | "stop"
-        val text: String
+        val partType: String,
+        val text: String,
+        val eventId: Int? = null
     ) : ConversationEvent()
 
     /**
@@ -75,9 +80,11 @@ sealed class ConversationEvent {
      * Event representing a response from the agent
      *
      * @param agentResponse The agent's response text
+     * @param eventId Server event id used to correlate this message in the transcript
      */
     data class AgentResponse(
         val agentResponse: String,
+        val eventId: Int? = null,
     ) : ConversationEvent()
 
     /**
@@ -85,19 +92,23 @@ sealed class ConversationEvent {
      *
      * @param originalAgentResponse The original agent response text
      * @param correctedAgentResponse The corrected agent response text
+     * @param eventId Server event id used to correlate this message in the transcript
      */
     data class AgentResponseCorrection(
         val originalAgentResponse: String,
         val correctedAgentResponse: String,
+        val eventId: Int? = null,
     ) : ConversationEvent()
 
     /**
      * Event representing user speech transcription
      *
      * @param userTranscript The transcribed user speech
+     * @param eventId Server event id used to correlate this message in the transcript
      */
     data class UserTranscript(
         val userTranscript: String,
+        val eventId: Int? = null,
     ) : ConversationEvent()
 
     /**

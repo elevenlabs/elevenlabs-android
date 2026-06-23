@@ -7,6 +7,7 @@ import io.elevenlabs.network.OutgoingEvent
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
 
 /**
  * Event processing pipeline for real-time conversation
@@ -39,8 +40,9 @@ class ConversationEventHandler(
     private val _conversationMode = MutableStateFlow(ConversationMode.LISTENING)
     val conversationMode: StateFlow<ConversationMode> = _conversationMode
 
-    // Keep track of the last agent event ID for feedback
-    private var _lastAgentEventId: Int? = null
+    // Reconciled conversation transcript exposed by the session.
+    private val _messages = MutableStateFlow<List<Message>>(emptyList())
+    val messages: StateFlow<List<Message>> = _messages
 
     // Keep track of the last event ID we sent feedback for to prevent duplicates
     private var _lastFeedbackSentForEventIdInt: Int? = null
@@ -81,6 +83,8 @@ class ConversationEventHandler(
      * Handle streaming agent chat response parts
      */
     private suspend fun handleAgentChatResponsePart(event: ConversationEvent.AgentChatResponsePart) {
+        appendAgentResponsePart(text = event.text, eventId = event.eventId, isStop = event.partType == "stop")
+
         when (event.partType) {
             "start" -> {
                 _conversationMode.value = ConversationMode.SPEAKING
@@ -103,6 +107,7 @@ class ConversationEventHandler(
      * Handle tentative user transcripts (partial recognition)
      */
     private suspend fun handleTentativeUserTranscript(event: ConversationEvent.TentativeUserTranscript) {
+        applyTentativeUserTranscript(content = event.userTranscript, eventId = event.eventId)
         try { onUserTranscript?.invoke(event.userTranscript) } catch (_: Throwable) {}
     }
 
@@ -131,6 +136,8 @@ class ConversationEventHandler(
      * Handle agent response events
      */
     private suspend fun handleAgentResponse(event: ConversationEvent.AgentResponse) {
+        applyAgentResponse(content = event.agentResponse, eventId = event.eventId)
+
         // Update conversation mode to speaking
         _conversationMode.value = ConversationMode.SPEAKING
 
@@ -146,7 +153,6 @@ class ConversationEventHandler(
             }
         }
 
-
         try {
             onAgentResponse?.invoke(event.agentResponse)
         } catch (e: Exception) {
@@ -158,6 +164,7 @@ class ConversationEventHandler(
      * Handle user transcript events
      */
     private suspend fun handleUserTranscript(event: ConversationEvent.UserTranscript) {
+        applyUserTranscript(content = event.userTranscript, eventId = event.eventId)
         try {
             onUserTranscript?.invoke(event.userTranscript)
         } catch (e: Exception) {
@@ -166,6 +173,7 @@ class ConversationEventHandler(
     }
 
     private fun handleAgentResponseCorrection(event: ConversationEvent.AgentResponseCorrection) {
+        applyAgentResponse(content = event.correctedAgentResponse, eventId = event.eventId)
         try {
             onAgentResponseCorrection?.invoke(event.originalAgentResponse, event.correctedAgentResponse)
         } catch (e: Exception) {
@@ -316,6 +324,7 @@ class ConversationEventHandler(
     fun sendUserMessage(content: String) {
         val event = OutgoingEvent.UserMessage(text = content)
         messageCallback(event)
+        appendLocalMessage(role = MessageRole.USER, content = content)
     }
 
     /**
@@ -341,7 +350,9 @@ class ConversationEventHandler(
      * @param isPositive true for positive feedback, false for negative
      */
     fun sendFeedback(isPositive: Boolean) {
-        val lastEventId = _lastAgentEventId
+        // The latest agent reply is the last agent message in arrival order; its event id is the
+        // feedback target.
+        val lastEventId = _messages.value.lastOrNull { it.role == MessageRole.AGENT }?.eventId
         val lastFeedbackSentForEventId = _lastFeedbackSentForEventIdInt
 
         if (lastEventId != null) {
@@ -399,14 +410,123 @@ class ConversationEventHandler(
      */
     fun getCurrentMode(): ConversationMode = _conversationMode.value
 
-    // No message list getter; UI should use server transcripts
+    // region Transcript reconciliation
+    //
+    // Each transcript/response is reconciled against the tail of its role's messages by event id,
+    // so [messages] stays consistent for any input order:
+    //   - a newer event id than the role's last message starts a new message;
+    //   - a matching event id updates the existing message (per the rules below);
+    //   - an older, unmatched event id is ignored.
+    // Messages are only ever appended (never reordered), so the absolute order follows the arrival
+    // of finalized text, and per-role event ids stay ordered and unique. A missing ([null]) event
+    // id can't be ordered, so it's treated as belonging to a new message.
+
+    /**
+     * Streaming `agent_chat_response_part`: accumulates streamed text. A matching message is grown
+     * in place while still partial and finalized on [isStop]; a finalized message is never reopened.
+     * With no match, a part for a newer turn starts a fresh message and a stale one is ignored.
+     */
+    private fun appendAgentResponsePart(text: String, eventId: Int?, isStop: Boolean) {
+        _messages.update { current ->
+            val idx = current.messageIndex(MessageRole.AGENT, eventId)
+            when {
+                idx != null -> {
+                    val existing = current[idx]
+                    if (!existing.isPartial) current
+                    else current.toMutableList().also {
+                        it[idx] = existing.copy(content = existing.content + text, eventId = eventId, isPartial = !isStop)
+                    }
+                }
+                current.isNewerThanLastMessage(MessageRole.AGENT, eventId) ->
+                    current + Message(role = MessageRole.AGENT, content = text, eventId = eventId, isPartial = !isStop)
+                else -> current
+            }
+        }
+    }
+
+    /**
+     * `agent_response` / `agent_response_correction`: the canonical finalized response for a turn.
+     * Updates the matching message in place (even after it was finalized), appends when it belongs
+     * to a newer turn, and ignores a stale/unmatched event id.
+     */
+    private fun applyAgentResponse(content: String, eventId: Int?) {
+        _messages.update { current ->
+            val idx = current.messageIndex(MessageRole.AGENT, eventId)
+            when {
+                idx != null -> current.toMutableList().also {
+                    it[idx] = current[idx].copy(content = content, eventId = eventId, isPartial = false)
+                }
+                current.isNewerThanLastMessage(MessageRole.AGENT, eventId) ->
+                    current + Message(role = MessageRole.AGENT, content = content, eventId = eventId, isPartial = false)
+                else -> current
+            }
+        }
+    }
+
+    /**
+     * Finalized `user_transcript`: finalizes the matching in-progress partial, or appends when it
+     * belongs to a newer turn; then drops any leftover partial (a tentative that never produced its
+     * own final), so a final never leaves a stray partial bubble behind.
+     */
+    private fun applyUserTranscript(content: String, eventId: Int?) {
+        _messages.update { current ->
+            val idx = current.messageIndex(MessageRole.USER, eventId)
+            val reconciled = when {
+                idx != null -> current.toMutableList().also {
+                    it[idx] = current[idx].copy(content = content, eventId = eventId, isPartial = false)
+                }
+                current.isNewerThanLastMessage(MessageRole.USER, eventId) ->
+                    current + Message(role = MessageRole.USER, content = content, eventId = eventId, isPartial = false)
+                else -> current
+            }
+            reconciled.filterNot { it.role == MessageRole.USER && it.isPartial }
+        }
+    }
+
+    /**
+     * `tentative_user_transcript`: the in-progress user transcript. Supersedes any existing partial,
+     * then surfaces a fresh one if it belongs to a turn newer than the last finalized transcript.
+     */
+    private fun applyTentativeUserTranscript(content: String, eventId: Int?) {
+        _messages.update { current ->
+            val withoutPartials = current.filterNot { it.role == MessageRole.USER && it.isPartial }
+            if (withoutPartials.isNewerThanLastMessage(MessageRole.USER, eventId)) {
+                withoutPartials + Message(role = MessageRole.USER, content = content, eventId = eventId, isPartial = true)
+            } else {
+                withoutPartials
+            }
+        }
+    }
+
+    /** Index of the message for [role] carrying exactly [eventId], or null (never matches null ids). */
+    private fun List<Message>.messageIndex(role: MessageRole, eventId: Int?): Int? {
+        if (eventId == null) return null
+        val idx = indexOfFirst { it.role == role && it.eventId == eventId }
+        return if (idx >= 0) idx else null
+    }
+
+    /**
+     * Whether [eventId] is newer than [role]'s most recent message. Messages are appended in arrival
+     * order, so the last message of a role carries its highest event id. A null incoming id (or a
+     * role whose last message has no id) can't be ordered and is treated as newer.
+     */
+    private fun List<Message>.isNewerThanLastMessage(role: MessageRole, eventId: Int?): Boolean {
+        if (eventId == null) return true
+        val lastEventId = lastOrNull { it.role == role }?.eventId ?: return true
+        return eventId > lastEventId
+    }
+
+    /** Appends a finalized local message (no event id), e.g. text the user sends. */
+    private fun appendLocalMessage(role: MessageRole, content: String) {
+        _messages.update { it + Message(role = role, content = content, eventId = null, isPartial = false) }
+    }
+    // endregion
 
     /**
      * Clean up resources
      */
     fun cleanup() {
         scope.cancel()
-        _lastAgentEventId = null
         _lastFeedbackSentForEventIdInt = null
     }
 }
