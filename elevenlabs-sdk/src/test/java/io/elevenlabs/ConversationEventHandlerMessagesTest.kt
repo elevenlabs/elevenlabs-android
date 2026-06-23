@@ -14,11 +14,8 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * Behavior of the reconciled transcript exposed via [ConversationEventHandler.messages].
- *
- * Incoming transcripts/responses are matched per role by event id: a matching id updates the
- * existing message in place, a newer id appends, and a stale unmatched id is ignored. An
- * in-progress user partial never survives once its turn is finalized.
+ * Reconciliation of [ConversationEventHandler.messages]: a matching event id updates in place,
+ * finalized records always append (even out of order), and a user partial never outlives its turn.
  */
 class ConversationEventHandlerMessagesTest {
 
@@ -42,7 +39,7 @@ class ConversationEventHandlerMessagesTest {
         toolRegistry.cleanup()
     }
 
-    // --- Agent streaming (agent_chat_response_part) ---
+    // --- Agent streaming ---
 
     @Test
     fun `streaming agent parts accumulate into one message and finalize on stop`() = runTest {
@@ -74,10 +71,8 @@ class ConversationEventHandlerMessagesTest {
         assertFalse(message.isPartial)
     }
 
-    // --- Agent response / correction ---
-
     @Test
-    fun `agent_response finalizes a streaming partial in place`() = runTest {
+    fun `agent_response finalizes a still-streaming partial in place`() = runTest {
         handler.handleIncomingEvent(part("start", "Hi", 3))
 
         handler.handleIncomingEvent(ConversationEvent.AgentResponse(agentResponse = "Hi, how can I help?", eventId = 3))
@@ -87,50 +82,15 @@ class ConversationEventHandlerMessagesTest {
         assertFalse(message.isPartial)
     }
 
-    @Test
-    fun `agent_response_correction replaces the matching agent message`() = runTest {
-        handler.handleIncomingEvent(ConversationEvent.AgentResponse(agentResponse = "It is sunny", eventId = 9))
-
-        handler.handleIncomingEvent(
-            ConversationEvent.AgentResponseCorrection(
-                originalAgentResponse = "It is sunny",
-                correctedAgentResponse = "It is raining",
-                eventId = 9
-            )
-        )
-
-        val message = handler.messages.value.single()
-        assertEquals("It is raining", message.content)
-        assertFalse(message.isPartial)
-    }
+    // --- Agent finalized records arrive out of order ---
 
     @Test
-    fun `agent_response with a newer event id appends a new message`() = runTest {
-        handler.handleIncomingEvent(ConversationEvent.AgentResponse(agentResponse = "first", eventId = 1))
-        handler.handleIncomingEvent(ConversationEvent.AgentResponse(agentResponse = "second", eventId = 2))
-
-        val messages = handler.messages.value
-        assertEquals(listOf("first", "second"), messages.map { it.content })
-        assertEquals(listOf(1, 2), messages.map { it.eventId })
-    }
-
-    @Test
-    fun `an out-of-order agent_response is still recorded in arrival order`() = runTest {
-        handler.handleIncomingEvent(ConversationEvent.AgentResponse(agentResponse = "current", eventId = 10))
-        // A finalized response is canonical: a lower (out-of-order) event id is kept, not dropped.
-        handler.handleIncomingEvent(ConversationEvent.AgentResponse(agentResponse = "earlier", eventId = 4))
-
-        val messages = handler.messages.value
-        assertEquals(listOf("current", "earlier"), messages.map { it.content })
-        assertEquals(listOf(10, 4), messages.map { it.eventId })
-    }
-
-    @Test
-    fun `a correction matches an out-of-order event id without duplicating`() = runTest {
+    fun `an out-of-order correction updates the right agent message without duplicating`() = runTest {
         handler.handleIncomingEvent(ConversationEvent.AgentResponse(agentResponse = "ten", eventId = 10))
+        // A lower id arrives late, so the list is no longer sorted by event id.
         handler.handleIncomingEvent(ConversationEvent.AgentResponse(agentResponse = "four", eventId = 4))
 
-        // id 10 now sits before id 4 in the list, so the matcher must scan past the lower id to find it.
+        // The matcher must scan past id 4 to find id 10 rather than appending a duplicate.
         handler.handleIncomingEvent(
             ConversationEvent.AgentResponseCorrection(
                 originalAgentResponse = "ten",
@@ -144,22 +104,22 @@ class ConversationEventHandlerMessagesTest {
         assertEquals(listOf(10, 4), messages.map { it.eventId })
     }
 
-    // --- User tentative (tentative_user_transcript) ---
-
     @Test
-    fun `tentative user transcripts for one turn collapse into a single partial`() = runTest {
-        handler.handleIncomingEvent(ConversationEvent.TentativeUserTranscript(userTranscript = "hel", eventId = 5))
-        handler.handleIncomingEvent(ConversationEvent.TentativeUserTranscript(userTranscript = "hello the", eventId = 5))
+    fun `an out-of-order user_transcript updates the right message without duplicating`() = runTest {
+        handler.handleIncomingEvent(ConversationEvent.UserTranscript(userTranscript = "twenty", eventId = 20))
+        handler.handleIncomingEvent(ConversationEvent.UserTranscript(userTranscript = "ten", eventId = 10))
 
-        val message = handler.messages.value.single()
-        assertEquals(MessageRole.USER, message.role)
-        assertEquals("hello the", message.content)
-        assertTrue(message.isPartial)
+        handler.handleIncomingEvent(ConversationEvent.UserTranscript(userTranscript = "twenty fixed", eventId = 20))
+
+        val messages = handler.messages.value
+        assertEquals(listOf("twenty fixed", "ten"), messages.map { it.content })
+        assertEquals(listOf(20, 10), messages.map { it.eventId })
     }
 
+    // --- User tentative / partial handling ---
+
     @Test
-    fun `a newer tentative replaces a stray partial instead of duplicating it`() = runTest {
-        // A tentative that never finalized, then a newer one: the stale partial must not linger.
+    fun `consecutive tentatives collapse into a single partial`() = runTest {
         handler.handleIncomingEvent(ConversationEvent.TentativeUserTranscript(userTranscript = "Set up.", eventId = 245))
         handler.handleIncomingEvent(ConversationEvent.TentativeUserTranscript(userTranscript = "Set up a test.", eventId = 249))
 
@@ -170,17 +130,19 @@ class ConversationEventHandlerMessagesTest {
     }
 
     @Test
-    fun `a tentative is ignored once the turn is finalized`() = runTest {
-        handler.handleIncomingEvent(ConversationEvent.UserTranscript(userTranscript = "hello there", eventId = 5))
-        // A stray tentative arriving after the final must not reopen a partial bubble.
-        handler.handleIncomingEvent(ConversationEvent.TentativeUserTranscript(userTranscript = "hello th", eventId = 5))
+    fun `a tentative is gated by the highest event id, not the latest message`() = runTest {
+        handler.handleIncomingEvent(ConversationEvent.UserTranscript(userTranscript = "q1", eventId = 20))
+        // A lower final id and a null-id typed message follow; neither lowers the high-water mark.
+        handler.handleIncomingEvent(ConversationEvent.UserTranscript(userTranscript = "q2", eventId = 10))
+        handler.sendUserMessage("typed")
 
-        val message = handler.messages.value.single()
-        assertEquals("hello there", message.content)
-        assertFalse(message.isPartial)
+        // id 15 is below the highest recorded id (20), so the tentative must stay suppressed.
+        handler.handleIncomingEvent(ConversationEvent.TentativeUserTranscript(userTranscript = "stale", eventId = 15))
+
+        val messages = handler.messages.value
+        assertEquals(listOf("q1", "q2", "typed"), messages.map { it.content })
+        assertTrue(messages.none { it.isPartial })
     }
-
-    // --- User transcript (final) ---
 
     @Test
     fun `user_transcript finalizes the in-progress partial`() = runTest {
@@ -194,7 +156,7 @@ class ConversationEventHandlerMessagesTest {
 
     @Test
     fun `user_transcript for a new turn appends and clears a stray partial`() = runTest {
-        // The id-468 partial never finalized; the next turn's final (id 475) must drop it.
+        // The id-468 partial never finalized; the next turn's final must drop it, not leave a bubble.
         handler.handleIncomingEvent(ConversationEvent.TentativeUserTranscript(userTranscript = "Any questions?", eventId = 468))
         handler.handleIncomingEvent(ConversationEvent.UserTranscript(userTranscript = "I have one.", eventId = 475))
 
@@ -204,18 +166,7 @@ class ConversationEventHandlerMessagesTest {
         assertFalse(message.isPartial)
     }
 
-    @Test
-    fun `an out-of-order user_transcript is still recorded in arrival order`() = runTest {
-        handler.handleIncomingEvent(ConversationEvent.UserTranscript(userTranscript = "current", eventId = 20))
-        // A finalized transcript is canonical: a lower (out-of-order) event id is kept, not dropped.
-        handler.handleIncomingEvent(ConversationEvent.UserTranscript(userTranscript = "earlier", eventId = 10))
-
-        val messages = handler.messages.value
-        assertEquals(listOf("current", "earlier"), messages.map { it.content })
-        assertEquals(listOf(20, 10), messages.map { it.eventId })
-    }
-
-    // --- Cross-role, local sends, ordering ---
+    // --- Cross-role, local sends, end to end ---
 
     @Test
     fun `user and agent messages with the same event id stay distinct`() = runTest {
@@ -240,19 +191,6 @@ class ConversationEventHandlerMessagesTest {
     }
 
     @Test
-    fun `a locally typed message does not resurrect a stale tentative`() = runTest {
-        handler.handleIncomingEvent(ConversationEvent.UserTranscript(userTranscript = "first", eventId = 10))
-        // The typed message carries no event id, so it must not lower the role's high-water mark...
-        handler.sendUserMessage("typed")
-        // ...and a tentative for an older turn stays suppressed.
-        handler.handleIncomingEvent(ConversationEvent.TentativeUserTranscript(userTranscript = "stale", eventId = 5))
-
-        val messages = handler.messages.value
-        assertEquals(listOf("first", "typed"), messages.map { it.content })
-        assertEquals(listOf(10, null), messages.map { it.eventId })
-    }
-
-    @Test
     fun `a full voice turn reconciles streamed and finalized text into ordered messages`() = runTest {
         handler.handleIncomingEvent(ConversationEvent.TentativeUserTranscript(userTranscript = "what's the", eventId = 1))
         handler.handleIncomingEvent(ConversationEvent.UserTranscript(userTranscript = "what's the weather?", eventId = 1))
@@ -262,11 +200,8 @@ class ConversationEventHandlerMessagesTest {
         handler.handleIncomingEvent(ConversationEvent.AgentResponse(agentResponse = "It's sunny.", eventId = 2))
 
         val messages = handler.messages.value
-        assertEquals(2, messages.size)
-        assertEquals(MessageRole.USER, messages[0].role)
-        assertEquals("what's the weather?", messages[0].content)
-        assertEquals(MessageRole.AGENT, messages[1].role)
-        assertEquals("It's sunny.", messages[1].content)
+        assertEquals(listOf("what's the weather?", "It's sunny."), messages.map { it.content })
+        assertEquals(listOf(MessageRole.USER, MessageRole.AGENT), messages.map { it.role })
         assertTrue("no partial bubbles should remain", messages.none { it.isPartial })
     }
 

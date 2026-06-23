@@ -408,34 +408,28 @@ class ConversationEventHandler(
      */
     fun getCurrentMode(): ConversationMode = _conversationMode.value
 
-    /**
-     * Streaming `agent_chat_response_part`: appends text to the matching partial and finalizes it on
-     * [isStop]; a finalized message is never reopened. With no match, a newer turn starts a new
-     * message and a stale part is ignored.
-     */
+    /** Accumulates a streaming `agent_chat_response_part` into its turn's message. */
     private fun appendAgentResponsePart(text: String, eventId: Int?, isStop: Boolean) {
         _messages.update { current ->
             val idx = current.messageIndex(MessageRole.AGENT, eventId)
             when {
                 idx != null -> {
                     val existing = current[idx]
+                    // Don't apply streaming updates to a finalized message.
                     if (!existing.isPartial) current
                     else current.toMutableList().also {
                         it[idx] = existing.copy(content = existing.content + text, eventId = eventId, isPartial = !isStop)
                     }
                 }
-                current.isNewerThanLastMessage(MessageRole.AGENT, eventId) ->
+                // With no match, only start a bubble for a new turn; ignore streaming updates with stale event_ids.
+                current.isNewerThanHighestEventId(MessageRole.AGENT, eventId) ->
                     current + Message(role = MessageRole.AGENT, content = text, eventId = eventId, isPartial = !isStop)
                 else -> current
             }
         }
     }
 
-    /**
-     * `agent_response` / `agent_response_correction`: the canonical finalized response for a turn.
-     * Overwrites the matching message in place (even if already finalized); otherwise appends in
-     * arrival order, so a finalized response is always recorded even if its event id is out of order.
-     */
+    /** Applies the canonical finalized `agent_response` / `agent_response_correction` for a turn. */
     private fun applyAgentResponse(content: String, eventId: Int?) {
         _messages.update { current ->
             val idx = current.messageIndex(MessageRole.AGENT, eventId)
@@ -449,11 +443,7 @@ class ConversationEventHandler(
         }
     }
 
-    /**
-     * Finalized `user_transcript`: updates the matching message in place or appends in arrival order
-     * (a finalized transcript is always recorded, even out of order), then drops any leftover user
-     * partial so a final never leaves a stray partial bubble behind.
-     */
+    /** Applies a finalized `user_transcript`. */
     private fun applyUserTranscript(content: String, eventId: Int?) {
         _messages.update { current ->
             val idx = current.messageIndex(MessageRole.USER, eventId)
@@ -464,49 +454,40 @@ class ConversationEventHandler(
             } else {
                 current + Message(role = MessageRole.USER, content = content, eventId = eventId, isPartial = false)
             }
+            // Make sure there are no orphaned tentative user transcripts.
             reconciled.filterNot { it.role == MessageRole.USER && it.isPartial }
         }
     }
 
-    /**
-     * `tentative_user_transcript`: the in-progress user transcript. Replaces any existing partial,
-     * then re-adds it only if newer than the last finalized transcript.
-     */
+    /** Applies an in-progress `tentative_user_transcript`. */
     private fun applyTentativeUserTranscript(content: String, eventId: Int?) {
         _messages.update { current ->
+            // Make sure there are no orphaned tentative user transcripts.
             val withoutPartials = current.filterNot { it.role == MessageRole.USER && it.isPartial }
-            if (withoutPartials.isNewerThanLastMessage(MessageRole.USER, eventId)) {
+            if (withoutPartials.isNewerThanHighestEventId(MessageRole.USER, eventId)) {
                 withoutPartials + Message(role = MessageRole.USER, content = content, eventId = eventId, isPartial = true)
             } else {
+                // Ignore tentative user transcripts with stale event ids.
                 withoutPartials
             }
         }
     }
 
-    /**
-     * Index of [role]'s message with exactly [eventId], or null (null ids never match). Per-role
-     * event ids are unique but not sorted (finalized records can arrive out of order), so this scans
-     * the whole list — tail-first to favor touching the most recent message.
-     */
+    /** Index of [role]'s message with exactly [eventId], or null (null ids never match). */
     private fun List<Message>.messageIndex(role: MessageRole, eventId: Int?): Int? {
         if (eventId == null) return null
-        for (i in lastIndex downTo 0) {
-            val candidate = this[i]
-            if (candidate.role == role && candidate.eventId == eventId) return i
-        }
-        return null
+        // Ids are unique per role but unsorted (finals can arrive late), so scan fully; tail-first
+        // keeps the common "touch the latest message" case cheap.
+        return indexOfLast { it.role == role && it.eventId == eventId }.takeIf { it >= 0 }
     }
 
-    /**
-     * Whether [eventId] is newer than [role]'s most recently appended server message. Gates
-     * in-progress partials (tentatives, streamed parts) so a stale one can't resurface. Null-id local
-     * messages (typed sends) are skipped so they can't shift the comparison. A null incoming id (or no
-     * id-carrying message yet) can't be ordered and is treated as newer.
-     */
-    private fun List<Message>.isNewerThanLastMessage(role: MessageRole, eventId: Int?): Boolean {
+    /** Whether [eventId] is newer than the highest event id [role] has recorded. */
+    private fun List<Message>.isNewerThanHighestEventId(role: MessageRole, eventId: Int?): Boolean {
         if (eventId == null) return true
-        val lastEventId = lastOrNull { it.role == role && it.eventId != null }?.eventId ?: return true
-        return eventId > lastEventId
+        // Take the max, not the last: finals can append out of order, and null-id local (typed)
+        // messages carry no order, so they're skipped.
+        val highestEventId = mapNotNull { if (it.role == role) it.eventId else null }.maxOrNull() ?: return true
+        return eventId > highestEventId
     }
 
     /** Appends a finalized local message (no event id), e.g. text the user sends. */
