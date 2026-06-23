@@ -115,13 +115,33 @@ class ConversationEventHandlerMessagesTest {
     }
 
     @Test
-    fun `an out-of-order agent_response with a stale event id is ignored`() = runTest {
+    fun `an out-of-order agent_response is still recorded in arrival order`() = runTest {
         handler.handleIncomingEvent(ConversationEvent.AgentResponse(agentResponse = "current", eventId = 10))
-        handler.handleIncomingEvent(ConversationEvent.AgentResponse(agentResponse = "stale", eventId = 4))
+        // A finalized response is canonical: a lower (out-of-order) event id is kept, not dropped.
+        handler.handleIncomingEvent(ConversationEvent.AgentResponse(agentResponse = "earlier", eventId = 4))
 
-        val message = handler.messages.value.single()
-        assertEquals("current", message.content)
-        assertEquals(10, message.eventId)
+        val messages = handler.messages.value
+        assertEquals(listOf("current", "earlier"), messages.map { it.content })
+        assertEquals(listOf(10, 4), messages.map { it.eventId })
+    }
+
+    @Test
+    fun `a correction matches an out-of-order event id without duplicating`() = runTest {
+        handler.handleIncomingEvent(ConversationEvent.AgentResponse(agentResponse = "ten", eventId = 10))
+        handler.handleIncomingEvent(ConversationEvent.AgentResponse(agentResponse = "four", eventId = 4))
+
+        // id 10 now sits before id 4 in the list, so the matcher must scan past the lower id to find it.
+        handler.handleIncomingEvent(
+            ConversationEvent.AgentResponseCorrection(
+                originalAgentResponse = "ten",
+                correctedAgentResponse = "ten fixed",
+                eventId = 10
+            )
+        )
+
+        val messages = handler.messages.value
+        assertEquals(listOf("ten fixed", "four"), messages.map { it.content })
+        assertEquals(listOf(10, 4), messages.map { it.eventId })
     }
 
     // --- User tentative (tentative_user_transcript) ---
@@ -185,13 +205,14 @@ class ConversationEventHandlerMessagesTest {
     }
 
     @Test
-    fun `an out-of-order user_transcript with a stale event id is ignored`() = runTest {
+    fun `an out-of-order user_transcript is still recorded in arrival order`() = runTest {
         handler.handleIncomingEvent(ConversationEvent.UserTranscript(userTranscript = "current", eventId = 20))
-        handler.handleIncomingEvent(ConversationEvent.UserTranscript(userTranscript = "stale", eventId = 10))
+        // A finalized transcript is canonical: a lower (out-of-order) event id is kept, not dropped.
+        handler.handleIncomingEvent(ConversationEvent.UserTranscript(userTranscript = "earlier", eventId = 10))
 
-        val message = handler.messages.value.single()
-        assertEquals("current", message.content)
-        assertEquals(20, message.eventId)
+        val messages = handler.messages.value
+        assertEquals(listOf("current", "earlier"), messages.map { it.content })
+        assertEquals(listOf(20, 10), messages.map { it.eventId })
     }
 
     // --- Cross-role, local sends, ordering ---
@@ -219,11 +240,12 @@ class ConversationEventHandlerMessagesTest {
     }
 
     @Test
-    fun `a locally typed message does not let a later stale transcript reappear`() = runTest {
+    fun `a locally typed message does not resurrect a stale tentative`() = runTest {
         handler.handleIncomingEvent(ConversationEvent.UserTranscript(userTranscript = "first", eventId = 10))
-        // The typed message carries no event id, so it must not lower the role's high-water mark.
+        // The typed message carries no event id, so it must not lower the role's high-water mark...
         handler.sendUserMessage("typed")
-        handler.handleIncomingEvent(ConversationEvent.UserTranscript(userTranscript = "stale", eventId = 5))
+        // ...and a tentative for an older turn stays suppressed.
+        handler.handleIncomingEvent(ConversationEvent.TentativeUserTranscript(userTranscript = "stale", eventId = 5))
 
         val messages = handler.messages.value
         assertEquals(listOf("first", "typed"), messages.map { it.content })
