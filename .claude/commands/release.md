@@ -1,6 +1,6 @@
 # Release
 
-Create a new release of the ElevenLabs Android SDK and publish it to Maven Central.
+Create a new release of the ElevenLabs Android SDK. Publishing to Maven Central is triggered by the GitHub Release workflow.
 
 ## Arguments
 
@@ -27,24 +27,14 @@ This value is used for:
 
 Do not update `example-app`'s `versionName`; it is the sample app version, not the SDK release version. The README intentionally uses `<latest>` instead of a pinned SDK version.
 
-## Publishing setup
+## CI publishing
 
-Publishing is handled by `.github/workflows/publish.yml` when a GitHub Release is published. The workflow:
-1. Checks out the repository.
-2. Uses JDK 17.
-3. Runs `./gradlew elevenlabs-sdk:build`.
-4. Runs `./gradlew elevenlabs-sdk:test`.
-5. Runs `./gradlew elevenlabs-sdk:publishToMavenCentral`.
-6. Uploads SDK artifacts.
+Publishing is handled by `.github/workflows/publish.yml` when a GitHub Release is published. Do not publish from a local checkout.
 
-The Maven Central publish step requires these repository secrets:
-- `MAVEN_CENTRAL_USERNAME`
-- `MAVEN_CENTRAL_PASSWORD`
-- `SIGNING_IN_MEMORY_KEY`
-- `SIGNING_KEY_ID`
-- `SIGNING_PASSWORD`
-
-Do not publish manually with `publishToMavenCentral` unless the user explicitly asks and the required signing/Maven Central credentials are available. The normal publishing path is the GitHub Release workflow.
+The workflow runs:
+1. `./gradlew elevenlabs-sdk:build`
+2. `./gradlew elevenlabs-sdk:test`
+3. `./gradlew elevenlabs-sdk:publishToMavenCentral`
 
 ## What previous releases show
 
@@ -83,43 +73,38 @@ Do not publish manually with `publishToMavenCentral` unless the user explicitly 
    ./gradlew test
    ```
 
-6. **Optional local publishing check**: If signing credentials are available locally, run:
-   ```bash
-   ./gradlew elevenlabs-sdk:publishToMavenLocal
-   ```
-
-7. **Commit**: Stage only the version file and commit:
+6. **Commit**: Stage only the version file and commit:
    ```bash
    git add elevenlabs-sdk/build.gradle.kts
    git commit -m "chore: bump version to X.Y.Z"
    ```
 
-8. **Search for the old version**:
+7. **Search for the old version**:
    ```bash
    rg "OLD_VERSION"
    ```
    Verify any remaining references are intentional.
 
-9. **Confirm with user**: Before pushing, show the user a summary:
+8. **Confirm with user**: Before pushing, show the user a summary:
    - Version being released.
    - Commits included since the previous tag.
    - The fact that publishing a GitHub Release will trigger Maven Central publication.
    - The exact commands that will push `main`, create/push the tag, and publish the release.
 
-10. **Push and tag**:
+9. **Push and tag**:
     ```bash
     git push origin main
     git tag vX.Y.Z
     git push origin vX.Y.Z
     ```
 
-11. **Create the GitHub Release**:
+10. **Create the GitHub Release**:
     ```bash
     gh release create vX.Y.Z --title "vX.Y.Z" --generate-notes
     ```
     This publishes the release immediately and triggers the `Publish SDK` workflow.
 
-12. **Monitor publishing**:
+11. **Monitor CI publishing**:
     ```bash
     gh run list --workflow="Publish SDK" --limit 5
     gh run watch <run-id>
@@ -129,13 +114,7 @@ Do not publish manually with `publishToMavenCentral` unless the user explicitly 
     gh run view <run-id> --log-failed
     ```
 
-13. **Verify Maven Central**: After the workflow succeeds, check the artifact:
-    ```bash
-    curl -fsSL "https://repo1.maven.org/maven2/io/elevenlabs/elevenlabs-android/X.Y.Z/elevenlabs-android-X.Y.Z.pom"
-    ```
-    Maven Central propagation can lag briefly, so retry before treating a missing artifact as a failed publish.
-
-14. **Report**: Share the GitHub Release URL, publish workflow run URL, and Maven coordinate:
+12. **Report**: Share the GitHub Release URL, publish workflow run URL, and Maven coordinate:
     ```
     io.elevenlabs:elevenlabs-android:X.Y.Z
     ```
