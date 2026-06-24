@@ -181,3 +181,22 @@ sealed class ConversationEvent {
     ) : ConversationEvent()
 
 }
+
+/**
+ * Lifecycle position of a streamed agent chat response part.
+ */
+enum class AgentResponsePartType {
+    START,
+    DELTA,
+    STOP;
+
+    companion object {
+        /** Maps a raw value ("start" | "delta" | "stop") to its enum, or null if unrecognized. */
+        fun fromString(value: String): AgentResponsePartType? = when (value) {
+            "start" -> START
+            "delta" -> DELTA
+            "stop" -> STOP
+            else -> null
+        }
+    }
+}

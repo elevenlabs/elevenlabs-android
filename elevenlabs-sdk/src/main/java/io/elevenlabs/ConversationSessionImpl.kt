@@ -33,7 +33,9 @@ internal class ConversationSessionImpl(
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     @Volatile private var conversationId: String? = null
 
-    // Event handler for processing conversation events
+    // Event handler for processing conversation events.
+    // The deprecated config callbacks are intentionally bridged here for back-compat.
+    @Suppress("DEPRECATION")
     private val eventHandler = ConversationEventHandler(
         audioManager = audioManager,
         toolRegistry = toolRegistry,
@@ -64,6 +66,21 @@ internal class ConversationSessionImpl(
         },
         onAgentResponseCorrection = { original, corrected ->
             try { config.onAgentResponseCorrection?.invoke(original, corrected) } catch (_: Throwable) {}
+        },
+        onUserTranscriptEvent = { text, eventId ->
+            try { config.onUserTranscriptEvent?.invoke(text, eventId) } catch (_: Throwable) {}
+        },
+        onTentativeUserTranscriptEvent = { text, eventId ->
+            try { config.onTentativeUserTranscriptEvent?.invoke(text, eventId) } catch (_: Throwable) {}
+        },
+        onAgentResponseEvent = { text, eventId ->
+            try { config.onAgentResponseEvent?.invoke(text, eventId) } catch (_: Throwable) {}
+        },
+        onAgentResponsePartEvent = { partType, text, eventId ->
+            try { config.onAgentResponsePartEvent?.invoke(partType, text, eventId) } catch (_: Throwable) {}
+        },
+        onAgentResponseCorrectionEvent = { text, eventId ->
+            try { config.onAgentResponseCorrectionEvent?.invoke(text, eventId) } catch (_: Throwable) {}
         },
         onAgentToolResponse = { toolName, toolCallId, toolType, isError ->
             try { config.onAgentToolResponse?.invoke(toolName, toolCallId, toolType, isError) } catch (_: Throwable) {}

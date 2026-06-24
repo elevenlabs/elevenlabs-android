@@ -1,5 +1,6 @@
 package io.elevenlabs
 
+import io.elevenlabs.models.AgentResponsePartType
 import io.elevenlabs.models.ConversationEvent.ClientToolCall
 import io.elevenlabs.models.ConversationMode
 import io.elevenlabs.models.ConversationStatus
@@ -77,9 +78,22 @@ data class ConversationConfig(
     val onAudioLevelChanged: ((level: Float) -> Unit)? = null,
     val onAudioAlignment: ((alignment: Map<String, Any>) -> Unit)? = null,
     val onAgentResponseMetadata: ((metadata: Map<String, Any>) -> Unit)? = null,
+    @Deprecated("Use onUserTranscriptEvent, which also reports the server event id.")
     val onUserTranscript: ((userTranscript: String) -> Unit)? = null,
+    @Deprecated("Use onAgentResponseEvent, which also reports the server event id.")
     val onAgentResponse: ((agentResponse: String) -> Unit)? = null,
+    @Deprecated("Use onAgentResponseCorrectionEvent, which reports the corrected text and its event id.")
     val onAgentResponseCorrection: ((originalResponse: String, correctedResponse: String) -> Unit)? = null,
+    // Finalized user transcript for a turn, with its server event id.
+    val onUserTranscriptEvent: ((text: String, eventId: Int?) -> Unit)? = null,
+    // In-progress user transcript, with its server event id.
+    val onTentativeUserTranscriptEvent: ((text: String, eventId: Int?) -> Unit)? = null,
+    // Finalized agent response for a turn, with its server event id.
+    val onAgentResponseEvent: ((text: String, eventId: Int?) -> Unit)? = null,
+    // Streaming agent response part (start/delta/stop), with its server event id.
+    val onAgentResponsePartEvent: ((partType: AgentResponsePartType, text: String, eventId: Int?) -> Unit)? = null,
+    // Corrected agent response (after interruption), with its server event id.
+    val onAgentResponseCorrectionEvent: ((text: String, eventId: Int?) -> Unit)? = null,
     val onAgentToolResponse: ((toolName: String, toolCallId: String, toolType: String, isError: Boolean) -> Unit)? = null,
     val onConversationInitiationMetadata: ((conversationId: String, agentOutputFormat: String, userInputFormat: String) -> Unit)? = null,
     val onInterruption: ((eventId: Int) -> Unit)? = null,
