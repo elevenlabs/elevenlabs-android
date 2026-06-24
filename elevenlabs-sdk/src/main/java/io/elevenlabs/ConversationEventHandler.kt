@@ -7,6 +7,7 @@ import io.elevenlabs.network.OutgoingEvent
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
 
 /**
  * Event processing pipeline for real-time conversation
@@ -39,8 +40,9 @@ class ConversationEventHandler(
     private val _conversationMode = MutableStateFlow(ConversationMode.LISTENING)
     val conversationMode: StateFlow<ConversationMode> = _conversationMode
 
-    // Keep track of the last agent event ID for feedback
-    private var _lastAgentEventId: Int? = null
+    // Reconciled conversation transcript exposed by the session.
+    private val _messages = MutableStateFlow<List<Message>>(emptyList())
+    val messages: StateFlow<List<Message>> = _messages
 
     // Keep track of the last event ID we sent feedback for to prevent duplicates
     private var _lastFeedbackSentForEventIdInt: Int? = null
@@ -81,6 +83,8 @@ class ConversationEventHandler(
      * Handle streaming agent chat response parts
      */
     private suspend fun handleAgentChatResponsePart(event: ConversationEvent.AgentChatResponsePart) {
+        appendAgentResponsePart(text = event.text, eventId = event.eventId, isStop = event.partType == "stop")
+
         when (event.partType) {
             "start" -> {
                 _conversationMode.value = ConversationMode.SPEAKING
@@ -103,6 +107,7 @@ class ConversationEventHandler(
      * Handle tentative user transcripts (partial recognition)
      */
     private suspend fun handleTentativeUserTranscript(event: ConversationEvent.TentativeUserTranscript) {
+        applyTentativeUserTranscript(content = event.userTranscript, eventId = event.eventId)
         try { onUserTranscript?.invoke(event.userTranscript) } catch (_: Throwable) {}
     }
 
@@ -131,6 +136,8 @@ class ConversationEventHandler(
      * Handle agent response events
      */
     private suspend fun handleAgentResponse(event: ConversationEvent.AgentResponse) {
+        applyAgentResponse(content = event.agentResponse, eventId = event.eventId)
+
         // Update conversation mode to speaking
         _conversationMode.value = ConversationMode.SPEAKING
 
@@ -146,7 +153,6 @@ class ConversationEventHandler(
             }
         }
 
-
         try {
             onAgentResponse?.invoke(event.agentResponse)
         } catch (e: Exception) {
@@ -158,6 +164,7 @@ class ConversationEventHandler(
      * Handle user transcript events
      */
     private suspend fun handleUserTranscript(event: ConversationEvent.UserTranscript) {
+        applyUserTranscript(content = event.userTranscript, eventId = event.eventId)
         try {
             onUserTranscript?.invoke(event.userTranscript)
         } catch (e: Exception) {
@@ -166,6 +173,7 @@ class ConversationEventHandler(
     }
 
     private fun handleAgentResponseCorrection(event: ConversationEvent.AgentResponseCorrection) {
+        applyAgentResponse(content = event.correctedAgentResponse, eventId = event.eventId)
         try {
             onAgentResponseCorrection?.invoke(event.originalAgentResponse, event.correctedAgentResponse)
         } catch (e: Exception) {
@@ -316,6 +324,7 @@ class ConversationEventHandler(
     fun sendUserMessage(content: String) {
         val event = OutgoingEvent.UserMessage(text = content)
         messageCallback(event)
+        appendLocalMessage(role = MessageRole.USER, content = content)
     }
 
     /**
@@ -341,7 +350,7 @@ class ConversationEventHandler(
      * @param isPositive true for positive feedback, false for negative
      */
     fun sendFeedback(isPositive: Boolean) {
-        val lastEventId = _lastAgentEventId
+        val lastEventId = _messages.value.lastOrNull { it.role == MessageRole.AGENT }?.eventId
         val lastFeedbackSentForEventId = _lastFeedbackSentForEventIdInt
 
         if (lastEventId != null) {
@@ -399,14 +408,98 @@ class ConversationEventHandler(
      */
     fun getCurrentMode(): ConversationMode = _conversationMode.value
 
-    // No message list getter; UI should use server transcripts
+    /** Accumulates a streaming `agent_chat_response_part` into its turn's message. */
+    private fun appendAgentResponsePart(text: String, eventId: Int?, isStop: Boolean) {
+        _messages.update { current ->
+            val idx = current.messageIndex(MessageRole.AGENT, eventId)
+            when {
+                idx != null -> {
+                    val existing = current[idx]
+                    // Don't apply streaming updates to a finalized message.
+                    if (!existing.isPartial) current
+                    else current.toMutableList().also {
+                        it[idx] = existing.copy(content = existing.content + text, eventId = eventId, isPartial = !isStop)
+                    }
+                }
+                // With no match, only start a bubble for a new turn; ignore streaming updates with stale event_ids.
+                current.isNewerThanHighestEventId(MessageRole.AGENT, eventId) ->
+                    current + Message(role = MessageRole.AGENT, content = text, eventId = eventId, isPartial = !isStop)
+                else -> current
+            }
+        }
+    }
+
+    /** Applies the canonical finalized `agent_response` / `agent_response_correction` for a turn. */
+    private fun applyAgentResponse(content: String, eventId: Int?) {
+        _messages.update { current ->
+            val idx = current.messageIndex(MessageRole.AGENT, eventId)
+            if (idx != null) {
+                current.toMutableList().also {
+                    it[idx] = current[idx].copy(content = content, eventId = eventId, isPartial = false)
+                }
+            } else {
+                current + Message(role = MessageRole.AGENT, content = content, eventId = eventId, isPartial = false)
+            }
+        }
+    }
+
+    /** Applies a finalized `user_transcript`. */
+    private fun applyUserTranscript(content: String, eventId: Int?) {
+        _messages.update { current ->
+            val idx = current.messageIndex(MessageRole.USER, eventId)
+            val reconciled = if (idx != null) {
+                current.toMutableList().also {
+                    it[idx] = current[idx].copy(content = content, eventId = eventId, isPartial = false)
+                }
+            } else {
+                current + Message(role = MessageRole.USER, content = content, eventId = eventId, isPartial = false)
+            }
+            // Make sure there are no orphaned tentative user transcripts.
+            reconciled.filterNot { it.role == MessageRole.USER && it.isPartial }
+        }
+    }
+
+    /** Applies an in-progress `tentative_user_transcript`. */
+    private fun applyTentativeUserTranscript(content: String, eventId: Int?) {
+        _messages.update { current ->
+            // Make sure there are no orphaned tentative user transcripts.
+            val withoutPartials = current.filterNot { it.role == MessageRole.USER && it.isPartial }
+            if (withoutPartials.isNewerThanHighestEventId(MessageRole.USER, eventId)) {
+                withoutPartials + Message(role = MessageRole.USER, content = content, eventId = eventId, isPartial = true)
+            } else {
+                // Ignore tentative user transcripts with stale event ids.
+                withoutPartials
+            }
+        }
+    }
+
+    /** Index of [role]'s message with exactly [eventId], or null (null ids never match). */
+    private fun List<Message>.messageIndex(role: MessageRole, eventId: Int?): Int? {
+        if (eventId == null) return null
+        // Ids are unique per role but unsorted (finals can arrive late), so scan fully; tail-first
+        // keeps the common "touch the latest message" case cheap.
+        return indexOfLast { it.role == role && it.eventId == eventId }.takeIf { it >= 0 }
+    }
+
+    /** Whether [eventId] is newer than the highest event id [role] has recorded. */
+    private fun List<Message>.isNewerThanHighestEventId(role: MessageRole, eventId: Int?): Boolean {
+        if (eventId == null) return true
+        // Take the max, not the last: finals can append out of order, and null-id local (typed)
+        // messages carry no order, so they're skipped.
+        val highestEventId = mapNotNull { if (it.role == role) it.eventId else null }.maxOrNull() ?: return true
+        return eventId > highestEventId
+    }
+
+    /** Appends a finalized local message (no event id), e.g. text the user sends. */
+    private fun appendLocalMessage(role: MessageRole, content: String) {
+        _messages.update { it + Message(role = role, content = content, eventId = null, isPartial = false) }
+    }
 
     /**
      * Clean up resources
      */
     fun cleanup() {
         scope.cancel()
-        _lastAgentEventId = null
         _lastFeedbackSentForEventIdInt = null
     }
 }

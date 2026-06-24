@@ -6,6 +6,7 @@ import io.elevenlabs.audio.AudioManager
 import io.elevenlabs.audio.LiveKitAudioManager
 import io.elevenlabs.models.ConversationMode
 import io.elevenlabs.models.ConversationStatus
+import io.elevenlabs.models.Message
 import io.elevenlabs.models.toConversationStatus
 import io.elevenlabs.network.BaseConnection
 import io.elevenlabs.network.ConversationEventParser
@@ -87,6 +88,7 @@ internal class ConversationSessionImpl(
     // Public observable properties exposed as StateFlow
     override val status: StateFlow<ConversationStatus> = _status
     override val mode: StateFlow<ConversationMode> = eventHandler.conversationMode
+    override val messages: StateFlow<List<Message>> = eventHandler.messages
     override val isMuted: StateFlow<Boolean> =
         if (audioManager is LiveKitAudioManager) {
             audioManager.muteState

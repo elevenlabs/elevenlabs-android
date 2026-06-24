@@ -13,16 +13,17 @@ import io.elevenlabs.example.models.TextChatMessage
 import io.elevenlabs.example.models.UiState
 import io.elevenlabs.models.ConversationMode
 import io.elevenlabs.models.ConversationStatus
+import io.elevenlabs.models.Message
+import io.elevenlabs.models.MessageRole
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * Single ViewModel covering both voice and text-only conversations. The same SDK callbacks feed
- * a shared transcript so a UI can render either modality (voice controls, chat bubbles, or both)
- * from one source of truth.
+ * Single ViewModel covering both voice and text-only conversations. The transcript is the SDK's
+ * reconciled [io.elevenlabs.ConversationSession.messages], mapped to the UI model, so chat bubbles
+ * render the same source of truth for either modality.
  */
 class ConversationViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -69,15 +70,12 @@ class ConversationViewModel(application: Application) : AndroidViewModel(applica
         _mutedSpeechEvent.postValue(null)
     }
 
-    // Chat transcript — populated for both voice (via onUserTranscript / onAgentResponse) and
-    // text-only (via sendUserMessage + onAgentResponse) sessions.
+    // Chat transcript, mapped from the SDK's reconciled ConversationSession.messages.
     private val _messages = MutableStateFlow<List<TextChatMessage>>(emptyList())
     val messages: StateFlow<List<TextChatMessage>> = _messages.asStateFlow()
 
     private val _isAgentTyping = MutableStateFlow(false)
     val isAgentTyping: StateFlow<Boolean> = _isAgentTyping.asStateFlow()
-
-    private var nextMessageId: Long = 1L
 
     fun startConversation(activityContext: Context, textOnly: Boolean) {
         if (currentSession != null && _uiState.value != UiState.Idle && _uiState.value !is UiState.Error) {
@@ -150,14 +148,12 @@ class ConversationViewModel(application: Application) : AndroidViewModel(applica
                     },
                     onUserTranscript = { transcript ->
                         Log.d(TAG, "onUserTranscript: $transcript")
-                        appendUserMessage(transcript)
                     },
                     onAudioAlignment = { alignment ->
                         Log.d(TAG, "onAudioAlignment: $alignment")
                     },
                     onAgentResponse = { response ->
                         Log.d(TAG, "onAgentResponse: $response")
-                        appendAgentText(response)
                     },
                     onAgentResponseMetadata = { metadata ->
                         Log.d(TAG, "onAgentResponseMetadata: $metadata")
@@ -212,6 +208,16 @@ class ConversationViewModel(application: Application) : AndroidViewModel(applica
                 viewModelScope.launch {
                     session.isMuted.collect { muted ->
                         _isMuted.postValue(muted)
+                    }
+                }
+
+                // Render the SDK's reconciled transcript, mapped to the UI model.
+                viewModelScope.launch {
+                    session.messages.collect { sdkMessages ->
+                        _messages.value = sdkMessages.map { it.toTextChatMessage() }
+                        // Show the typing indicator while the newest turn is the user's; once the
+                        // agent starts streaming, its partial bubble takes over.
+                        _isAgentTyping.value = sdkMessages.lastOrNull()?.role == MessageRole.USER
                     }
                 }
 
@@ -303,14 +309,13 @@ class ConversationViewModel(application: Application) : AndroidViewModel(applica
             return
         }
         try {
+            // The SDK appends the local user bubble to its transcript, which we collect above.
             session.sendUserMessage(trimmed)
         } catch (t: Throwable) {
             Log.d(TAG, "Failed to send user message: ${t.message}")
             _errorMessage.postValue(t.localizedMessage ?: "Send failed")
             return
         }
-        appendUserMessage(trimmed)
-        _isAgentTyping.value = true
     }
 
     fun sendUserActivity() {
@@ -343,37 +348,13 @@ class ConversationViewModel(application: Application) : AndroidViewModel(applica
     private fun resetTranscript() {
         _messages.value = emptyList()
         _isAgentTyping.value = false
-        nextMessageId = 1L
     }
 
-    private fun appendUserMessage(text: String) {
-        if (text.isBlank()) return
-        _messages.update { it + TextChatMessage(nextMessageId++, text, isFromUser = true) }
-    }
-
-    /**
-     * Append agent text to the latest agent bubble or start a new bubble if the previous message
-     * was from the user. Three SDK events funnel into onAgentResponse — streaming deltas, tentative
-     * partials, and a final consolidated message — so dedup against the full bubble content rather
-     * than appending blindly.
-     */
-    private fun appendAgentText(text: String) {
-        if (text.isEmpty()) return
-        _messages.update { current ->
-            val last = current.lastOrNull()
-            if (last == null || last.isFromUser) {
-                return@update current + TextChatMessage(nextMessageId++, text, isFromUser = false)
-            }
-            val updated = when {
-                last.content == text -> last
-                text.startsWith(last.content) -> last.copy(content = text)
-                else -> last.copy(content = last.content + text)
-            }
-            if (updated === last) current
-            else current.toMutableList().also { it[it.lastIndex] = updated }
-        }
-        _isAgentTyping.value = false
-    }
+    private fun Message.toTextChatMessage() = TextChatMessage(
+        id = id,
+        content = content,
+        isFromUser = role == MessageRole.USER,
+    )
 
     override fun onCleared() {
         super.onCleared()

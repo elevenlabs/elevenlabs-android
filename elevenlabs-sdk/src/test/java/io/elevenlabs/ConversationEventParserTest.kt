@@ -277,6 +277,108 @@ class ConversationEventParserTest {
         assertTrue(toolCall.parameters.isEmpty())
     }
 
+    // ==================== Transcript event_id tests ====================
+
+    @Test
+    fun `agent_response should parse event_id`() {
+        val json = """
+            {
+                "type": "agent_response",
+                "agent_response_event": {
+                    "agent_response": "Hello",
+                    "event_id": 12
+                }
+            }
+        """.trimIndent()
+
+        val event = ConversationEventParser.parseIncomingEvent(json)
+
+        assertTrue(event is ConversationEvent.AgentResponse)
+        val agentResponse = event as ConversationEvent.AgentResponse
+        assertEquals("Hello", agentResponse.agentResponse)
+        assertEquals(12, agentResponse.eventId)
+    }
+
+    @Test
+    fun `user_transcript should parse event_id`() {
+        val json = """
+            {
+                "type": "user_transcript",
+                "user_transcription_event": {
+                    "user_transcript": "hello world",
+                    "event_id": 8
+                }
+            }
+        """.trimIndent()
+
+        val event = ConversationEventParser.parseIncomingEvent(json)
+
+        assertTrue(event is ConversationEvent.UserTranscript)
+        val userTranscript = event as ConversationEvent.UserTranscript
+        assertEquals("hello world", userTranscript.userTranscript)
+        assertEquals(8, userTranscript.eventId)
+    }
+
+    @Test
+    fun `agent_chat_response_part should parse event_id and type`() {
+        val json = """
+            {
+                "type": "agent_chat_response_part",
+                "text_response_part": {
+                    "text": "Hi",
+                    "type": "delta",
+                    "event_id": 3
+                }
+            }
+        """.trimIndent()
+
+        val event = ConversationEventParser.parseIncomingEvent(json)
+
+        assertTrue(event is ConversationEvent.AgentChatResponsePart)
+        val part = event as ConversationEvent.AgentChatResponsePart
+        assertEquals("Hi", part.text)
+        assertEquals("delta", part.partType)
+        assertEquals(3, part.eventId)
+    }
+
+    @Test
+    fun `agent_response_correction should parse event_id`() {
+        val json = """
+            {
+                "type": "agent_response_correction",
+                "agent_response_correction_event": {
+                    "original_agent_response": "sunny",
+                    "corrected_agent_response": "raining",
+                    "event_id": 21
+                }
+            }
+        """.trimIndent()
+
+        val event = ConversationEventParser.parseIncomingEvent(json)
+
+        assertTrue(event is ConversationEvent.AgentResponseCorrection)
+        val correction = event as ConversationEvent.AgentResponseCorrection
+        assertEquals("raining", correction.correctedAgentResponse)
+        assertEquals(21, correction.eventId)
+    }
+
+    @Test
+    fun `agent_response without event_id yields null event_id`() {
+        val json = """
+            {
+                "type": "agent_response",
+                "agent_response_event": {
+                    "agent_response": "Hello"
+                }
+            }
+        """.trimIndent()
+
+        val event = ConversationEventParser.parseIncomingEvent(json)
+
+        assertTrue(event is ConversationEvent.AgentResponse)
+        assertEquals(null, (event as ConversationEvent.AgentResponse).eventId)
+    }
+
     // ==================== Edge case tests ====================
 
     @Test

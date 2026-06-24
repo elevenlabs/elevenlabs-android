@@ -42,6 +42,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import io.elevenlabs.example.R
+import io.elevenlabs.example.models.TextChatMessage
 import io.elevenlabs.models.ConversationMode
 import io.elevenlabs.models.ConversationStatus
 
@@ -51,9 +52,9 @@ private val DisconnectedGray = Color(0xFF9CA3AF)
 private val ErrorRed = Color(0xFFEF4444)
 
 /**
- * Voice-mode controls: status, mute, volume, feedback, mode indicator, and a composer for sending
- * contextual updates or text user messages over the active session. Owns its own Disconnect
- * action — there is no shared header.
+ * Voice-mode controls: status, mute, volume, feedback, mode indicator, a live transcript, and a
+ * composer for sending contextual updates or text user messages over the active session. Owns its
+ * own Disconnect action — there is no shared header.
  */
 @Composable
 fun VoiceScreen(
@@ -61,6 +62,7 @@ fun VoiceScreen(
     mode: ConversationMode?,
     isMuted: Boolean,
     canSendFeedback: Boolean,
+    messages: List<TextChatMessage>,
     onDisconnect: () -> Unit,
     onToggleMute: () -> Unit,
     onSetVolume: (Float) -> Unit,
@@ -145,6 +147,10 @@ fun VoiceScreen(
                 ) { Text("👎") }
             }
 
+            if (messages.isNotEmpty()) {
+                Transcript(messages = messages)
+            }
+
             MessageComposer(
                 value = input,
                 onValueChange = { input = it },
@@ -198,6 +204,33 @@ private fun ModeIndicator(mode: ConversationMode?) {
         )
         Spacer(Modifier.size(8.dp))
         Text(text = label, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+@Composable
+private fun Transcript(
+    messages: List<TextChatMessage>,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        Text(
+            text = "Transcript",
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Spacer(Modifier.height(8.dp))
+        // Bounded height + own scroll so the transcript doesn't crowd out the controls below.
+        MessageList(
+            messages = messages,
+            isAgentTyping = false,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(260.dp)
+                .background(
+                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                    RoundedCornerShape(12.dp),
+                ),
+        )
     }
 }
 
@@ -267,6 +300,10 @@ private fun VoiceScreenPreviewListening() {
             mode = ConversationMode.LISTENING,
             isMuted = false,
             canSendFeedback = true,
+            messages = listOf(
+                TextChatMessage("1", "Hey, can you hear me?", isFromUser = true),
+                TextChatMessage("2", "Loud and clear. How can I help?", isFromUser = false),
+            ),
             onDisconnect = {},
             onToggleMute = {},
             onSetVolume = {},
@@ -287,6 +324,7 @@ private fun VoiceScreenPreviewSpeakingMuted() {
             mode = ConversationMode.SPEAKING,
             isMuted = true,
             canSendFeedback = false,
+            messages = emptyList(),
             onDisconnect = {},
             onToggleMute = {},
             onSetVolume = {},
@@ -307,6 +345,7 @@ private fun VoiceScreenPreviewConnecting() {
             mode = null,
             isMuted = false,
             canSendFeedback = false,
+            messages = emptyList(),
             onDisconnect = {},
             onToggleMute = {},
             onSetVolume = {},

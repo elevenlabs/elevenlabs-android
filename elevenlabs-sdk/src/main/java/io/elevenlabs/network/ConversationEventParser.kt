@@ -88,13 +88,22 @@ object ConversationEventParser {
         return jsonObject.get("type")?.asString
     }
 
+    /** Extracts an optional `event_id`, or null when absent/JSON null. */
+    private fun JsonObject?.parseEventId(): Int? {
+        val element = this?.get("event_id") ?: return null
+        return if (element.isJsonNull) null else element.asInt
+    }
+
     /**
      * Parse agent response event
      */
     private fun parseAgentResponse(jsonObject: JsonObject): ConversationEvent.AgentResponse {
         val obj = jsonObject.getAsJsonObject("agent_response_event")
         val content = obj?.get("agent_response")?.asString ?: ""
-        return ConversationEvent.AgentResponse(agentResponse = content)
+        return ConversationEvent.AgentResponse(
+            agentResponse = content,
+            eventId = obj.parseEventId()
+        )
     }
 
     /**
@@ -103,7 +112,10 @@ object ConversationEventParser {
     private fun parseUserTranscript(jsonObject: JsonObject): ConversationEvent.UserTranscript {
         val obj = jsonObject.getAsJsonObject("user_transcription_event")
         val content = obj?.get("user_transcript")?.asString ?: ""
-        return ConversationEvent.UserTranscript(userTranscript = content)
+        return ConversationEvent.UserTranscript(
+            userTranscript = content,
+            eventId = obj.parseEventId()
+        )
     }
 
     /**
@@ -164,7 +176,11 @@ object ConversationEventParser {
         val obj = jsonObject.getAsJsonObject("agent_response_correction_event") ?: jsonObject
         val original = obj.get("original_agent_response")?.asString ?: ""
         val corrected = obj.get("corrected_agent_response")?.asString ?: ""
-        return ConversationEvent.AgentResponseCorrection(originalAgentResponse = original, correctedAgentResponse = corrected)
+        return ConversationEvent.AgentResponseCorrection(
+            originalAgentResponse = original,
+            correctedAgentResponse = corrected,
+            eventId = obj.parseEventId()
+        )
     }
 
     private fun parseAgentToolResponse(jsonObject: JsonObject): ConversationEvent.AgentToolResponse {
@@ -286,7 +302,8 @@ object ConversationEventParser {
         val type = obj.get("type")?.asString ?: ""
         return ConversationEvent.AgentChatResponsePart(
             partType = type,
-            text = text
+            text = text,
+            eventId = obj.parseEventId()
         )
     }
 

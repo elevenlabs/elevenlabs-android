@@ -3,6 +3,7 @@ package io.elevenlabs
 import io.elevenlabs.models.ConversationEvent
 import io.elevenlabs.models.ConversationMode
 import io.elevenlabs.models.ConversationStatus
+import io.elevenlabs.models.Message
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -28,7 +29,14 @@ interface ConversationSession {
      */
     val mode: StateFlow<ConversationMode>
 
-    // Message history is intentionally not tracked; rely on server transcripts
+    /**
+     * The conversation transcript, reconciled by the SDK.
+     *
+     * Emits the full, ordered list of [Message]s whenever it changes. Messages update in
+     * place via [Message.isPartial] as they stream in. Prefer this for UI binding over
+     * assembling a transcript from individual callbacks.
+     */
+    val messages: StateFlow<List<Message>>
 
     /**
      * Whether the microphone is currently muted
