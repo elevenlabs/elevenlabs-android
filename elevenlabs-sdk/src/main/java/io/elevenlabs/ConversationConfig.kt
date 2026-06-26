@@ -1,5 +1,6 @@
 package io.elevenlabs
 
+import io.elevenlabs.models.AudioFrame
 import io.elevenlabs.models.AgentResponsePartType
 import io.elevenlabs.models.ConversationEvent.ClientToolCall
 import io.elevenlabs.models.ConversationMode
@@ -76,6 +77,7 @@ data class ConversationConfig(
     val onUnhandledClientToolCall: ((ClientToolCall) -> Unit)? = null,
     val onVadScore: ((score: Float) -> Unit)? = null,
     val onAudioLevelChanged: ((level: Float) -> Unit)? = null,
+    val onAudioFrame: ((frame: AudioFrame) -> Unit)? = null,
     val onAudioAlignment: ((alignment: Map<String, Any>) -> Unit)? = null,
     val onAgentResponseMetadata: ((metadata: Map<String, Any>) -> Unit)? = null,
     @Deprecated("Use onUserTranscriptEvent, which also reports the server event id.")
