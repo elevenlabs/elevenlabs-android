@@ -22,6 +22,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
 import livekit.org.webrtc.AudioTrackSink
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.util.Collections
 import io.elevenlabs.ConversationOverridesBuilder
 
@@ -60,9 +61,6 @@ class WebRTCConnection(
     private var messageJob: Job? = null
     private var audioLevelJob: Job? = null
 
-    // Forwards per-frame PCM from each subscribed remote audio track to
-    // [ConversationConfig.onAudioFrame]. Tracked so we can detach cleanly on unsubscribe /
-    // disconnect.
     private val agentAudioSinks: MutableMap<RemoteAudioTrack, AudioTrackSink> =
         Collections.synchronizedMap(mutableMapOf())
 
@@ -309,9 +307,6 @@ class WebRTCConnection(
         when (track) {
             is RemoteAudioTrack -> {
                 Log.d("WebRTCConnection", "Audio track subscribed from ${participant.sid}")
-                // Audio tracks are automatically played by LiveKit. Additionally tap raw PCM
-                // for any caller that wired onAudioFrame so they can drive amplitude-
-                // reactive UI in sync with playback.
                 attachAgentAudioSink(track)
             }
             else -> {
@@ -467,14 +462,6 @@ class WebRTCConnection(
         scope.cancel()
     }
 
-    /**
-     * WebRTC sink wrapped around [ConversationConfig.onAudioFrame]. One instance per
-     * subscribed remote audio track. Resolves the callback lazily via [callback] so updating
-     * [latestConfig] mid-session is picked up automatically.
-     *
-     * `onData` is invoked on WebRTC's audio thread; the wrapped callback is responsible for
-     * not blocking it.
-     */
     private class AudioFrameSink(
         private val callback: () -> ((AudioFrame) -> Unit)?,
     ) : AudioTrackSink {
@@ -488,7 +475,7 @@ class WebRTCConnection(
         ) {
             val cb = callback() ?: return
             val frame = AudioFrame(
-                audioData = audioData,
+                audioData = audioData.order(ByteOrder.LITTLE_ENDIAN),
                 bitsPerSample = bitsPerSample,
                 sampleRate = sampleRate,
                 channelCount = numberOfChannels,

@@ -146,6 +146,9 @@ class ConversationViewModel(application: Application) : AndroidViewModel(applica
                         // Commented out as it's quite noisy
                         // Log.d(TAG, "audioLevel: $level")
                     },
+                    onAudioFrame = { frame ->
+                        // Log.d(TAG, "onAudioFrame: ${frame.numberOfFrames} frames @ ${frame.sampleRate}Hz")
+                    },
                     onUserTranscriptEvent = { transcript, eventId ->
                         Log.d(TAG, "onUserTranscript: text='$transcript', eventId=$eventId")
                     },
