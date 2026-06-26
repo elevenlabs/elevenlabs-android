@@ -3,6 +3,7 @@ package io.elevenlabs.network
 import android.content.Context
 import android.util.Log
 import io.elevenlabs.ConversationConfig
+import io.elevenlabs.models.AudioFrame
 import io.elevenlabs.models.ConversationMode
 import io.elevenlabs.models.ConversationStatus
 import io.elevenlabs.models.DisconnectionDetails
@@ -19,7 +20,10 @@ import io.livekit.android.events.collect
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
+import livekit.org.webrtc.AudioTrackSink
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.util.Collections
 import io.elevenlabs.ConversationOverridesBuilder
 
 
@@ -56,6 +60,9 @@ class WebRTCConnection(
     private val messageChannel = Channel<String>(Channel.UNLIMITED)
     private var messageJob: Job? = null
     private var audioLevelJob: Job? = null
+
+    private val agentAudioSinks: MutableMap<RemoteAudioTrack, AudioTrackSink> =
+        Collections.synchronizedMap(mutableMapOf())
 
     /**
      * Connect to LiveKit room using the WebRTC token from [config] and the given server URL.
@@ -111,6 +118,9 @@ class WebRTCConnection(
             // Stop audio level monitoring
             audioLevelJob?.cancel()
             audioLevelJob = null
+
+            // Detach any agent audio sinks before the room tears the tracks down
+            detachAllAgentAudioSinks()
 
             // Stop event handling
             eventHandlerJob?.cancel()
@@ -250,6 +260,11 @@ class WebRTCConnection(
                         handleTrackSubscribed(event.track, event.participant)
                     }
 
+                    is RoomEvent.TrackUnsubscribed -> {
+                        Log.d("WebRTCConnection", "Track unsubscribed from ${event.participant.sid}")
+                        handleTrackUnsubscribed(event.track)
+                    }
+
                     is RoomEvent.DataReceived -> {
                         handleDataReceived(event.data, event.participant)
                     }
@@ -292,10 +307,52 @@ class WebRTCConnection(
         when (track) {
             is RemoteAudioTrack -> {
                 Log.d("WebRTCConnection", "Audio track subscribed from ${participant.sid}")
-                // Audio tracks are automatically played by LiveKit
+                attachAgentAudioSink(track)
             }
             else -> {
                 Log.d("WebRTCConnection", "Other track type subscribed: ${track.javaClass.simpleName}")
+            }
+        }
+    }
+
+    private fun handleTrackUnsubscribed(track: Track) {
+        if (track is RemoteAudioTrack) detachAgentAudioSink(track)
+    }
+
+    private fun attachAgentAudioSink(track: RemoteAudioTrack) {
+        synchronized(agentAudioSinks) {
+            if (agentAudioSinks.containsKey(track)) return
+            val sink = AudioFrameSink { latestConfig?.onAudioFrame }
+            agentAudioSinks[track] = sink
+            try {
+                track.addSink(sink)
+            } catch (t: Throwable) {
+                agentAudioSinks.remove(track)
+                Log.d("WebRTCConnection", "Failed to attach agent audio sink: ${t.message}")
+            }
+        }
+    }
+
+    private fun detachAgentAudioSink(track: RemoteAudioTrack) {
+        synchronized(agentAudioSinks) {
+            val sink = agentAudioSinks.remove(track) ?: return
+            try {
+                track.removeSink(sink)
+            } catch (t: Throwable) {
+                Log.d("WebRTCConnection", "Failed to detach agent audio sink: ${t.message}")
+            }
+        }
+    }
+
+    private fun detachAllAgentAudioSinks() {
+        val snapshot = synchronized(agentAudioSinks) {
+            agentAudioSinks.toMap().also { agentAudioSinks.clear() }
+        }
+        snapshot.forEach { (track, sink) ->
+            try {
+                track.removeSink(sink)
+            } catch (t: Throwable) {
+                Log.d("WebRTCConnection", "Failed to detach agent audio sink: ${t.message}")
             }
         }
     }
@@ -403,5 +460,33 @@ class WebRTCConnection(
     fun cleanup() {
         disconnect()
         scope.cancel()
+    }
+
+    private class AudioFrameSink(
+        private val callback: () -> ((AudioFrame) -> Unit)?,
+    ) : AudioTrackSink {
+        override fun onData(
+            audioData: ByteBuffer,
+            bitsPerSample: Int,
+            sampleRate: Int,
+            numberOfChannels: Int,
+            numberOfFrames: Int,
+            absoluteCaptureTimestampMs: Long,
+        ) {
+            val cb = callback() ?: return
+            val frame = AudioFrame(
+                audioData = audioData.order(ByteOrder.LITTLE_ENDIAN),
+                bitsPerSample = bitsPerSample,
+                sampleRate = sampleRate,
+                channelCount = numberOfChannels,
+                numberOfFrames = numberOfFrames,
+                absoluteCaptureTimestampMs = absoluteCaptureTimestampMs,
+            )
+            try {
+                cb(frame)
+            } catch (t: Throwable) {
+                Log.d("WebRTCConnection", "onAudioFrame callback threw: ${t.message}")
+            }
+        }
     }
 }

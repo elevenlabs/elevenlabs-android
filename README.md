@@ -131,6 +131,11 @@ val config = ConversationConfig(
         // Agent audio level (volume), range from 0.0 to 1.0
         // Log.d("MyApp", "Agent audio level: $level")
     },
+    onAudioFrame = { frame ->
+        // Decoded PCM chunk from the agent's audio track (little-endian).
+        // The ByteBuffer is only valid for the duration of this callback — copy what you need.
+        // Useful for visualizations, recording, or custom DSP.
+    },
     onUserTranscriptEvent = { text, eventId ->
         // User's speech transcribed to text (finalized)
     },
@@ -315,6 +320,7 @@ Both parameters are optional and default to the standard ElevenLabs production e
 
 - **onVadScore(score: Float)**: Voice Activity Detection score. Ranges from 0 to 1 where higher values indicate confidence of speech.
 - **onAudioLevelChanged(level: Float)**: Agent audio level (volume) in real-time. Ranges from 0.0 (silent) to 1.0 (loudest). Typically shows small variations during speech.
+- **onAudioFrame(frame: AudioFrame)**: Decoded PCM chunks from the agent's remote audio track, delivered as they arrive. `AudioFrame` exposes `audioData: ByteBuffer` (little-endian PCM), `bitsPerSample`, `sampleRate`, `channelCount`, `numberOfFrames`, and `absoluteCaptureTimestampMs`. The `ByteBuffer` is only valid for the duration of the callback — copy the bytes if you need to keep them. Useful for waveform visualizations, recording, or custom audio processing. The callback runs on LiveKit's audio thread, so keep work short and avoid blocking.
 - **onConversationInitiationMetadata(conversationId: String, agentOutputFormat: String, userInputFormat: String)**: Conversation metadata including audio format details.
 
 ---
