@@ -2,7 +2,7 @@ package io.elevenlabs
 
 import io.elevenlabs.audio.AudioManager
 import io.elevenlabs.models.ConversationEvent
-import io.elevenlabs.network.OutgoingEvent
+import io.elevenlabs.models.OutgoingEvent
 import io.mockk.*
 import org.junit.After
 import org.junit.Before

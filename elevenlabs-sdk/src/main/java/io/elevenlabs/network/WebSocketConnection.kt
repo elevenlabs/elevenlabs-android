@@ -4,6 +4,7 @@ import android.util.Log
 import io.elevenlabs.ConversationConfig
 import io.elevenlabs.ConversationOverridesBuilder
 import io.elevenlabs.models.DisconnectionDetails
+import io.elevenlabs.models.OutgoingEvent
 import io.elevenlabs.models.toConversationStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

@@ -7,6 +7,7 @@ import io.elevenlabs.models.AudioFrame
 import io.elevenlabs.models.ConversationMode
 import io.elevenlabs.models.ConversationStatus
 import io.elevenlabs.models.DisconnectionDetails
+import io.elevenlabs.models.OutgoingEvent
 import io.elevenlabs.models.toConversationStatus
 import io.livekit.android.room.Room
 import io.livekit.android.room.participant.LocalParticipant
