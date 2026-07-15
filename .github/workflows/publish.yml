@@ -31,6 +31,32 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
+    - name: Verify SDK version matches release tag
+      env:
+        RELEASE_TAG: ${{ github.event.release.tag_name }}
+      run: |
+        TAG_VERSION="${RELEASE_TAG#v}"
+        SDK_VERSION=$(./gradlew -q :elevenlabs-sdk:properties | grep '^version:' | cut -d' ' -f2)
+
+        if [ -z "$SDK_VERSION" ]; then
+          echo "::error::Could not read elevenlabs-sdk version."
+          exit 1
+        fi
+
+        if [ "$SDK_VERSION" != "$TAG_VERSION" ]; then
+          echo "::error::Release tag v$TAG_VERSION does not match elevenlabs-sdk version $SDK_VERSION. Bump the version in elevenlabs-sdk/build.gradle.kts before releasing."
+          exit 1
+        fi
+
+        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "https://repo1.maven.org/maven2/io/elevenlabs/elevenlabs-android/$SDK_VERSION/")
+        if [ "$HTTP_CODE" = "200" ]; then
+          echo "::error::Version $SDK_VERSION is already published to Maven Central."
+          exit 1
+        elif [ "$HTTP_CODE" != "404" ]; then
+          echo "::error::Could not verify Maven Central status for $SDK_VERSION (HTTP $HTTP_CODE)."
+          exit 1
+        fi
+
     - name: Build SDK
       run: ./gradlew elevenlabs-sdk:build
 
