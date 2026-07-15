@@ -3,7 +3,6 @@ package io.elevenlabs
 import android.util.Log
 import io.elevenlabs.audio.AudioManager
 import io.elevenlabs.models.*
-import io.elevenlabs.network.OutgoingEvent
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
