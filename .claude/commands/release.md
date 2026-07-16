@@ -32,9 +32,10 @@ Do not update `example-app`'s `versionName`; it is the sample app version, not t
 Publishing is handled by `.github/workflows/publish.yml` when a GitHub Release is published. Do not publish from a local checkout.
 
 The workflow runs:
-1. `./gradlew elevenlabs-sdk:build`
-2. `./gradlew elevenlabs-sdk:test`
-3. `./gradlew elevenlabs-sdk:publishToMavenCentral`
+1. A version check that fails the release if the version doesn't match the tag, or is already published to Maven Central.
+2. `./gradlew elevenlabs-sdk:build`
+3. `./gradlew elevenlabs-sdk:test`
+4. `./gradlew elevenlabs-sdk:publishToMavenCentral`
 
 ## What previous releases show
 
@@ -60,7 +61,7 @@ The workflow runs:
    ```
    Use this to confirm the next version and release scope.
 
-4. **Update the SDK version**: Edit `elevenlabs-sdk/build.gradle.kts` and replace the existing `version = "..."` with `version = "X.Y.Z"`.
+4. **Update the SDK version**: Edit `elevenlabs-sdk/build.gradle.kts` and replace the existing `version = "..."` with `version = "X.Y.Z"`. Use the full three-part version, matching the tag exactly. For tag `vX.Y.Z`, use `version = "X.Y.Z"`, not `"X.Y"`. The publish workflow now fails the release if these don't match.
 
 5. **Build and test**:
    ```bash
