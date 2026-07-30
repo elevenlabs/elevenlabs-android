@@ -471,8 +471,9 @@ class WebSocketConnectionTest {
     }
 
     /**
-     * The guard above is armed by disconnect() and disarmed by connect(), so a connection
-     * reused for a second session must still report that session's failures.
+     * disconnect() releases the listener that owns the socket and connect() installs a new
+     * one, so a connection reused for a second session must still report that session's
+     * failures rather than staying permanently silent.
      */
     @Test
     fun `reconnecting after a client-initiated disconnect re-arms error reporting`() {
@@ -509,6 +510,102 @@ class WebSocketConnectionTest {
         assertTrue("onDisconnect fired for the second session", disconnected.await(3, TimeUnit.SECONDS))
         assertTrue("expected Error, got ${captured.get()}", captured.get() is DisconnectionDetails.Error)
         assertEquals(ConnectionState.DISCONNECTED, connection.connectionState)
+    }
+
+    /**
+     * The socket from an ended session usually outlives it - the peer never has to echo our
+     * close frame - so its callbacks can still arrive once a replacement connection is live.
+     * They must not touch the new session's state or reach its callbacks.
+     */
+    @Test
+    fun `a stale socket from a previous session cannot disturb the current one`() {
+        val firstReady = CountDownLatch(1)
+        val firstServerSocket = AtomicReference<WebSocket>()
+        enqueueServerWs(onOpen = { ws ->
+            firstServerSocket.set(ws)
+            firstReady.countDown()
+        })
+
+        val connection = newConnection()
+        val observedStates = ConcurrentLinkedQueue<ConnectionState>()
+        connection.setOnConnectionStateListener { state -> observedStates.add(state) }
+
+        runBlocking { connection.connect(apiBaseUrl(), ConversationConfig(agentId = "agent-xyz")) }
+        assertTrue("server saw the first open", firstReady.await(3, TimeUnit.SECONDS))
+        assertTrue("client reached CONNECTED", awaitUntil {
+            connection.connectionState == ConnectionState.CONNECTED
+        })
+
+        connection.disconnect()
+
+        // Second session on the same instance, with its own callbacks.
+        val secondReady = CountDownLatch(1)
+        enqueueServerWs(onOpen = { secondReady.countDown() })
+        val secondSessionDisconnects = AtomicInteger(0)
+        val secondConfig = ConversationConfig(
+            agentId = "agent-xyz",
+            onDisconnect = { secondSessionDisconnects.incrementAndGet() }
+        )
+        runBlocking { connection.connect(apiBaseUrl(), secondConfig) }
+        assertTrue("server saw the second open", secondReady.await(3, TimeUnit.SECONDS))
+        assertTrue("client reached CONNECTED again", awaitUntil {
+            connection.connectionState == ConnectionState.CONNECTED
+        })
+
+        // Abnormally close the *first* socket only; the second one stays untouched.
+        firstServerSocket.get().close(1011, "internal error")
+
+        assertTrue(
+            "expected the stale socket's close to be delivered; logs=$logMessages",
+            awaitUntil { loggedMessageContaining("WebSocket closed") }
+        )
+
+        assertEquals(ConnectionState.CONNECTED, connection.connectionState)
+        assertEquals(
+            listOf(
+                ConnectionState.CONNECTING, ConnectionState.CONNECTED, ConnectionState.IDLE,
+                ConnectionState.CONNECTING, ConnectionState.CONNECTED
+            ),
+            observedStates.toList()
+        )
+        assertEquals(
+            "the stale socket reported a disconnect to the live session",
+            0,
+            secondSessionDisconnects.get()
+        )
+    }
+
+    /**
+     * ConversationSessionImpl.start() calls disconnect() when start-up fails, which can land
+     * while the handshake is still in flight. The late onOpen must not revive the connection.
+     */
+    @Test
+    fun `onOpen after disconnect does not resurrect the connection`() {
+        // Nothing is enqueued yet, so MockWebServer's dispatcher parks the upgrade request
+        // until we hand it a response - after disconnect() has already run.
+        val connection = newConnection()
+        val observedStates = ConcurrentLinkedQueue<ConnectionState>()
+        connection.setOnConnectionStateListener { state -> observedStates.add(state) }
+
+        runBlocking { connection.connect(apiBaseUrl(), ConversationConfig(agentId = "agent-xyz")) }
+        assertEquals(ConnectionState.CONNECTING, connection.connectionState)
+
+        connection.disconnect()
+        assertEquals(ConnectionState.IDLE, connection.connectionState)
+
+        // Now let the handshake complete.
+        enqueueServerWs()
+
+        assertTrue(
+            "expected the late open to be delivered; logs=$logMessages",
+            awaitUntil { loggedMessageContaining("WebSocket opened") }
+        )
+
+        assertEquals(ConnectionState.IDLE, connection.connectionState)
+        assertEquals(
+            listOf(ConnectionState.CONNECTING, ConnectionState.IDLE),
+            observedStates.toList()
+        )
     }
 
     @Test

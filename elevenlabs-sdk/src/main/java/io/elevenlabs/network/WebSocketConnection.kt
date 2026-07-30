@@ -53,13 +53,15 @@ class WebSocketConnection(
     private val disconnectCallbackInvoked = AtomicBoolean(false)
 
     /**
-     * Set before we start the close handshake in [disconnect]. Closing a WebSocket only
-     * sends a close frame: okhttp keeps reading until the peer answers, so [listener] can
-     * still fire [WebSocketListener.onClosed] - or [WebSocketListener.onFailure] with an
-     * EOFException when the peer drops the socket first. Those late callbacks belong to a
-     * connection we already reported as cleanly closed and must not move the state again.
+     * The listener owning the live socket, claimed before the socket is created and
+     * released before it is closed. Every other listener is stale and its callbacks are
+     * ignored, because okhttp keeps reading after [WebSocket.close] until the peer answers
+     * - reporting an EOFException through [WebSocketListener.onFailure] if the peer drops
+     * the connection first - and a reconnect would otherwise let the previous socket
+     * disturb the new session.
      */
-    private val intentionalDisconnect = AtomicBoolean(false)
+    @Volatile
+    private var activeListener: ConnectionListener? = null
 
     @Volatile
     private var conversationIdNotified = false
@@ -73,17 +75,21 @@ class WebSocketConnection(
             updateConnectionState(ConnectionState.CONNECTING)
             latestConfig = config
             disconnectCallbackInvoked.set(false)
-            intentionalDisconnect.set(false)
             conversationIdNotified = false
 
             val url = buildWebSocketUrl(serverUrl, config.signedUrl, config.agentId)
             Log.d("WebSocketConnection", "Connecting to $url")
 
             val request = Request.Builder().url(url).build()
-            webSocket = client.newWebSocket(request, listener)
+            // Take ownership before the socket exists, so an immediate callback is never
+            // mistaken for a stale one.
+            val connectionListener = ConnectionListener()
+            activeListener = connectionListener
+            webSocket = client.newWebSocket(request, connectionListener)
 
             startMessageProcessing()
         } catch (e: Exception) {
+            activeListener = null
             invokeOnDisconnect(DisconnectionDetails.Error(e))
             updateConnectionState(ConnectionState.ERROR)
             throw RuntimeException("Failed to open WebSocket", e)
@@ -92,7 +98,9 @@ class WebSocketConnection(
 
     override fun disconnect(details: DisconnectionDetails?) {
         var disconnectDetails = details ?: DisconnectionDetails.User
-        intentionalDisconnect.set(true)
+        // Release ownership before closing: everything the socket reports from here on
+        // belongs to a connection we are already reporting as closed.
+        activeListener = null
 
         try {
             messageJob?.cancel()
@@ -142,8 +150,26 @@ class WebSocketConnection(
         scope.cancel()
     }
 
-    private val listener = object : WebSocketListener() {
+    /**
+     * Listener for a single connection attempt. okhttp holds on to it for the lifetime of
+     * its socket, which outlives the session: it keeps delivering callbacks after we close
+     * and after we have opened a replacement connection. Once [activeListener] points
+     * elsewhere this instance is stale and every callback becomes a no-op, so a finished
+     * connection can neither move the state nor reach the app's callbacks.
+     */
+    private inner class ConnectionListener : WebSocketListener() {
+
+        private val isStale: Boolean
+            get() = activeListener !== this
+
         override fun onOpen(webSocket: WebSocket, response: Response) {
+            if (isStale) {
+                // Disconnected while the handshake was still in flight.
+                Log.d("WebSocketConnection", "WebSocket opened on a stale connection, ignoring")
+                webSocket.close(NORMAL_CLOSURE, "client closed")
+                return
+            }
+
             Log.d("WebSocketConnection", "WebSocket opened")
             updateConnectionState(ConnectionState.CONNECTED)
 
@@ -157,23 +183,27 @@ class WebSocketConnection(
         }
 
         override fun onMessage(webSocket: WebSocket, text: String) {
+            if (isStale) return
             handleIncomingText(text)
         }
 
         override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
+            if (isStale) return
             handleIncomingText(bytes.utf8())
         }
 
         override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
             Log.d("WebSocketConnection", "WebSocket closing: code=$code reason=$reason")
+            // Complete the handshake even when stale, so the peer's close is acknowledged
+            // instead of being left to time out.
             webSocket.close(code, reason)
         }
 
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-            if (intentionalDisconnect.get()) {
+            if (isStale) {
                 Log.d(
                     "WebSocketConnection",
-                    "WebSocket closed after client-initiated disconnect, ignoring: code=$code reason=$reason"
+                    "WebSocket closed on a stale connection, ignoring: code=$code reason=$reason"
                 )
                 return
             }
@@ -193,13 +223,13 @@ class WebSocketConnection(
         }
 
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-            if (intentionalDisconnect.get()) {
-                // Tearing the socket down mid-handshake is normal: the peer often drops the
-                // connection before its close frame reaches us, which okhttp reports as an
-                // EOFException. The session already ended cleanly, so this is not an error.
+            if (isStale) {
+                // Expected after a client-initiated close: the peer usually drops the
+                // connection before its close frame reaches us, which okhttp surfaces as an
+                // EOFException. That connection already ended cleanly, so it is not an error.
                 Log.d(
                     "WebSocketConnection",
-                    "WebSocket failure after client-initiated disconnect, ignoring: $t"
+                    "WebSocket failure on a stale connection, ignoring: $t"
                 )
                 return
             }
