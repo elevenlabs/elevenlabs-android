@@ -52,6 +52,15 @@ class WebSocketConnection(
 
     private val disconnectCallbackInvoked = AtomicBoolean(false)
 
+    /**
+     * Set before we start the close handshake in [disconnect]. Closing a WebSocket only
+     * sends a close frame: okhttp keeps reading until the peer answers, so [listener] can
+     * still fire [WebSocketListener.onClosed] - or [WebSocketListener.onFailure] with an
+     * EOFException when the peer drops the socket first. Those late callbacks belong to a
+     * connection we already reported as cleanly closed and must not move the state again.
+     */
+    private val intentionalDisconnect = AtomicBoolean(false)
+
     @Volatile
     private var conversationIdNotified = false
 
@@ -64,6 +73,7 @@ class WebSocketConnection(
             updateConnectionState(ConnectionState.CONNECTING)
             latestConfig = config
             disconnectCallbackInvoked.set(false)
+            intentionalDisconnect.set(false)
             conversationIdNotified = false
 
             val url = buildWebSocketUrl(serverUrl, config.signedUrl, config.agentId)
@@ -82,6 +92,7 @@ class WebSocketConnection(
 
     override fun disconnect(details: DisconnectionDetails?) {
         var disconnectDetails = details ?: DisconnectionDetails.User
+        intentionalDisconnect.set(true)
 
         try {
             messageJob?.cancel()
@@ -159,6 +170,14 @@ class WebSocketConnection(
         }
 
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+            if (intentionalDisconnect.get()) {
+                Log.d(
+                    "WebSocketConnection",
+                    "WebSocket closed after client-initiated disconnect, ignoring: code=$code reason=$reason"
+                )
+                return
+            }
+
             Log.d("WebSocketConnection", "WebSocket closed: code=$code reason=$reason")
             // Normal closure (1000) is treated as a user-initiated end. Anything else
             // (going away, abnormal, server unreachable, etc.) is reported as an error
@@ -174,6 +193,17 @@ class WebSocketConnection(
         }
 
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+            if (intentionalDisconnect.get()) {
+                // Tearing the socket down mid-handshake is normal: the peer often drops the
+                // connection before its close frame reaches us, which okhttp reports as an
+                // EOFException. The session already ended cleanly, so this is not an error.
+                Log.d(
+                    "WebSocketConnection",
+                    "WebSocket failure after client-initiated disconnect, ignoring: $t"
+                )
+                return
+            }
+
             Log.e("WebSocketConnection", "WebSocket failure: ${t.message}", t)
             updateConnectionState(ConnectionState.ERROR)
             val cause = if (t is Exception) t else RuntimeException(t)

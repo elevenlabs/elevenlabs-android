@@ -1,5 +1,6 @@
 package io.elevenlabs
 
+import io.elevenlabs.models.ConversationStatus
 import io.elevenlabs.models.DisconnectionDetails
 import io.elevenlabs.network.ConnectionState
 import io.elevenlabs.network.WebSocketConnection
@@ -15,6 +16,7 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -23,6 +25,7 @@ import org.junit.Test
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
 class WebSocketConnectionTest {
@@ -32,6 +35,10 @@ class WebSocketConnectionTest {
     private val serverSockets = ConcurrentLinkedQueue<WebSocket>()
     private val connections = ConcurrentLinkedQueue<WebSocketConnection>()
 
+    /** Every message the SDK logged, used to wait for asynchronous listener callbacks. */
+    private val logMessages = ConcurrentLinkedQueue<String>()
+    private var transportKilled = false
+
     @Before
     fun setup() {
         server = MockWebServer()
@@ -39,9 +46,9 @@ class WebSocketConnectionTest {
         client = OkHttpClient()
 
         mockkStatic(android.util.Log::class)
-        every { android.util.Log.d(any(), any<String>()) } returns 0
-        every { android.util.Log.e(any(), any<String>()) } returns 0
-        every { android.util.Log.e(any(), any<String>(), any()) } returns 0
+        every { android.util.Log.d(any(), any<String>()) } answers { logMessages.add(secondArg()); 0 }
+        every { android.util.Log.e(any(), any<String>()) } answers { logMessages.add(secondArg()); 0 }
+        every { android.util.Log.e(any(), any<String>(), any()) } answers { logMessages.add(secondArg()); 0 }
     }
 
     @After
@@ -51,7 +58,7 @@ class WebSocketConnectionTest {
         serverSockets.forEach { runCatching { it.close(1000, "test teardown") } }
         client.dispatcher.executorService.shutdownNow()
         client.connectionPool.evictAll()
-        server.shutdown()
+        if (!transportKilled) runCatching { server.shutdown() }
         unmockkAll()
     }
 
@@ -73,6 +80,7 @@ class WebSocketConnectionTest {
     private fun enqueueServerWs(
         onOpen: ((WebSocket) -> Unit)? = null,
         onMessage: ((WebSocket, String) -> Unit)? = null,
+        onClosing: ((WebSocket, Int, String) -> Unit)? = null,
     ) {
         server.enqueue(MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
@@ -83,8 +91,34 @@ class WebSocketConnectionTest {
             override fun onMessage(webSocket: WebSocket, text: String) {
                 onMessage?.invoke(webSocket, text)
             }
+
+            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                onClosing?.invoke(webSocket, code, reason)
+            }
         }))
     }
+
+    /**
+     * Drops the live TCP connection without a WebSocket close handshake, which is what
+     * makes okhttp's reader thread fail with EOFException instead of calling onClosed.
+     */
+    private fun killTransport() {
+        transportKilled = true
+        runCatching { server.shutdown() }
+    }
+
+    /** Polls [condition] until it holds or [timeoutMs] elapses. */
+    private fun awaitUntil(timeoutMs: Long = 3_000, condition: () -> Boolean): Boolean {
+        val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs)
+        while (System.nanoTime() < deadline) {
+            if (condition()) return true
+            Thread.sleep(20)
+        }
+        return condition()
+    }
+
+    private fun loggedMessageContaining(fragment: String): Boolean =
+        logMessages.any { it.contains(fragment) }
 
     @Test
     fun `buildWebSocketUrl converts https endpoint to wss`() {
@@ -322,6 +356,159 @@ class WebSocketConnectionTest {
             "expected Error, got ${captured.get()}",
             captured.get() is DisconnectionDetails.Error
         )
+    }
+
+    /**
+     * Regression test for https://github.com/elevenlabs/elevenlabs-android/issues/67.
+     *
+     * disconnect() only starts the close handshake. If the peer drops the TCP connection
+     * before its close frame arrives, okhttp's reader thread reports EOFException through
+     * onFailure - long after we already reported a clean, user-initiated disconnect. That
+     * late failure must not be published as ERROR.
+     */
+    @Test
+    fun `client-initiated disconnect stays IDLE when the transport fails afterwards`() {
+        val ready = CountDownLatch(1)
+        enqueueServerWs(onOpen = { ready.countDown() })
+
+        val observedStates = ConcurrentLinkedQueue<ConnectionState>()
+        val observedStatuses = ConcurrentLinkedQueue<ConversationStatus>()
+        val disconnectCount = AtomicInteger(0)
+        val capturedDetails = AtomicReference<DisconnectionDetails>()
+        val config = ConversationConfig(
+            agentId = "agent-xyz",
+            onStatusChange = { status -> observedStatuses.add(status) },
+            onDisconnect = { details ->
+                disconnectCount.incrementAndGet()
+                capturedDetails.compareAndSet(null, details)
+            }
+        )
+
+        val connection = newConnection()
+        connection.setOnConnectionStateListener { state -> observedStates.add(state) }
+
+        runBlocking { connection.connect(apiBaseUrl(), config) }
+        assertTrue("server saw open", ready.await(3, TimeUnit.SECONDS))
+        assertTrue("client reached CONNECTED", awaitUntil {
+            connection.connectionState == ConnectionState.CONNECTED
+        })
+
+        connection.disconnect()
+        killTransport()
+
+        assertTrue(
+            "expected okhttp to surface a transport failure; logs=$logMessages",
+            awaitUntil { loggedMessageContaining("WebSocket failure") }
+        )
+
+        assertEquals(ConnectionState.IDLE, connection.connectionState)
+        assertEquals(
+            listOf(ConnectionState.CONNECTING, ConnectionState.CONNECTED, ConnectionState.IDLE),
+            observedStates.toList()
+        )
+        assertFalse(
+            "ERROR status reported after a user-initiated disconnect: $observedStatuses",
+            observedStatuses.contains(ConversationStatus.ERROR)
+        )
+        assertEquals("onDisconnect fired more than once", 1, disconnectCount.get())
+        assertTrue(
+            "expected User, got ${capturedDetails.get()}",
+            capturedDetails.get() is DisconnectionDetails.User
+        )
+    }
+
+    /**
+     * The happy-path variant of the above: the peer does echo our close frame, so okhttp
+     * calls onClosed. disconnect() already reset the state to IDLE, so that late callback
+     * must not push another transition either.
+     */
+    @Test
+    fun `client-initiated disconnect ignores the peer close frame`() {
+        val ready = CountDownLatch(1)
+        enqueueServerWs(
+            onOpen = { ready.countDown() },
+            // Complete the handshake so the client observes a clean close after disconnect().
+            onClosing = { ws, code, reason -> ws.close(code, reason) }
+        )
+
+        val observedStates = ConcurrentLinkedQueue<ConnectionState>()
+        val disconnectCount = AtomicInteger(0)
+        val capturedDetails = AtomicReference<DisconnectionDetails>()
+        val config = ConversationConfig(
+            agentId = "agent-xyz",
+            onDisconnect = { details ->
+                disconnectCount.incrementAndGet()
+                capturedDetails.compareAndSet(null, details)
+            }
+        )
+
+        val connection = newConnection()
+        connection.setOnConnectionStateListener { state -> observedStates.add(state) }
+
+        runBlocking { connection.connect(apiBaseUrl(), config) }
+        assertTrue("server saw open", ready.await(3, TimeUnit.SECONDS))
+        assertTrue("client reached CONNECTED", awaitUntil {
+            connection.connectionState == ConnectionState.CONNECTED
+        })
+
+        connection.disconnect()
+
+        assertTrue(
+            "expected okhttp to surface the peer close; logs=$logMessages",
+            awaitUntil { loggedMessageContaining("WebSocket closed") }
+        )
+
+        assertEquals(ConnectionState.IDLE, connection.connectionState)
+        assertEquals(
+            listOf(ConnectionState.CONNECTING, ConnectionState.CONNECTED, ConnectionState.IDLE),
+            observedStates.toList()
+        )
+        assertEquals("onDisconnect fired more than once", 1, disconnectCount.get())
+        assertTrue(
+            "expected User, got ${capturedDetails.get()}",
+            capturedDetails.get() is DisconnectionDetails.User
+        )
+    }
+
+    /**
+     * The guard above is armed by disconnect() and disarmed by connect(), so a connection
+     * reused for a second session must still report that session's failures.
+     */
+    @Test
+    fun `reconnecting after a client-initiated disconnect re-arms error reporting`() {
+        enqueueServerWs()
+        val connection = newConnection()
+        runBlocking { connection.connect(apiBaseUrl(), ConversationConfig(agentId = "agent-xyz")) }
+        assertTrue("client reached CONNECTED", awaitUntil {
+            connection.connectionState == ConnectionState.CONNECTED
+        })
+
+        connection.disconnect()
+        assertEquals(ConnectionState.IDLE, connection.connectionState)
+
+        val ready = CountDownLatch(1)
+        val serverSocket = AtomicReference<WebSocket>()
+        enqueueServerWs(onOpen = { ws ->
+            serverSocket.set(ws)
+            ready.countDown()
+        })
+
+        val disconnected = CountDownLatch(1)
+        val captured = AtomicReference<DisconnectionDetails>()
+        val config = ConversationConfig(
+            agentId = "agent-xyz",
+            onDisconnect = { details ->
+                if (captured.compareAndSet(null, details)) disconnected.countDown()
+            }
+        )
+        runBlocking { connection.connect(apiBaseUrl(), config) }
+        assertTrue("server saw the second open", ready.await(3, TimeUnit.SECONDS))
+
+        serverSocket.get().close(1011, "internal error")
+
+        assertTrue("onDisconnect fired for the second session", disconnected.await(3, TimeUnit.SECONDS))
+        assertTrue("expected Error, got ${captured.get()}", captured.get() is DisconnectionDetails.Error)
+        assertEquals(ConnectionState.DISCONNECTED, connection.connectionState)
     }
 
     @Test
