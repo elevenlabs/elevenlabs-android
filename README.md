@@ -292,8 +292,8 @@ Both parameters are optional and default to the standard ElevenLabs production e
 
 - **onConnect(conversationId: String)**: Fired once connected. Conversation ID can also be read via `session.getId()`.
 - **onDisconnect(reason: DisconnectionDetails)**: Called when the conversation ends. The reason can be:
-  - `DisconnectionDetails.User` - User ended the conversation
-  - `DisconnectionDetails.Agent` - Agent ended the conversation
+  - `DisconnectionDetails.User` - Your code ended the conversation by calling `endSession()`/`disconnect()`. Never fired for a connection that timed out or was closed by the remote side on its own.
+  - `DisconnectionDetails.Agent` - The remote side closed the connection without a local `endSession()`/`disconnect()` call. For text-only (WebSocket) sessions this also covers a server-enforced idle/inactivity timeout, since the SDK can't distinguish that from the agent gracefully ending the call - both close the socket normally.
   - `DisconnectionDetails.Error(exception: Exception)` - Connection error occurred
 - **onMessage(source: String, message: String)**: Raw JSON messages from data channel. `source` is `"ai"` or `"user"`.
 - **onModeChange(mode: ConversationMode)**: `ConversationMode.SPEAKING` or `ConversationMode.LISTENING`; drive your speaking indicator.

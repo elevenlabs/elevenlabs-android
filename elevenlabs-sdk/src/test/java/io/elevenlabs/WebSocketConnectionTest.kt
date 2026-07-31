@@ -260,7 +260,11 @@ class WebSocketConnectionTest {
     }
 
     @Test
-    fun `server-initiated normal close maps to User and DISCONNECTED state`() {
+    fun `server-initiated normal close maps to Agent and DISCONNECTED state`() {
+        // A normal-closure code (1000) coming from the remote side - without a local
+        // disconnect() call - means the server ended things on its own (e.g. the agent
+        // gracefully ending the conversation, or an idle/inactivity timeout). Since the
+        // client never asked for the disconnect, it must not be reported as User.
         val ready = CountDownLatch(1)
         val serverSocket = AtomicReference<WebSocket>()
         enqueueServerWs(onOpen = { ws ->
@@ -289,8 +293,38 @@ class WebSocketConnectionTest {
         serverSocket.get().close(1000, "bye")
 
         assertTrue("onDisconnect fired", disconnected.await(3, TimeUnit.SECONDS))
-        assertTrue(capturedDetails.get() is DisconnectionDetails.User)
+        assertTrue(
+            "expected Agent, got ${capturedDetails.get()}",
+            capturedDetails.get() is DisconnectionDetails.Agent
+        )
         assertEquals(ConnectionState.DISCONNECTED, capturedState.get())
+    }
+
+    @Test
+    fun `client-initiated disconnect maps to User even though the socket closes normally`() {
+        val ready = CountDownLatch(1)
+        enqueueServerWs(onOpen = { ready.countDown() })
+
+        val disconnected = CountDownLatch(1)
+        val captured = AtomicReference<DisconnectionDetails>()
+        val config = ConversationConfig(
+            agentId = "agent-xyz",
+            onDisconnect = { details ->
+                if (captured.compareAndSet(null, details)) disconnected.countDown()
+            }
+        )
+
+        val connection = newConnection()
+        runBlocking { connection.connect(apiBaseUrl(), config) }
+        assertTrue(ready.await(3, TimeUnit.SECONDS))
+
+        connection.disconnect()
+
+        assertTrue("onDisconnect fired", disconnected.await(3, TimeUnit.SECONDS))
+        assertTrue(
+            "expected User, got ${captured.get()}",
+            captured.get() is DisconnectionDetails.User
+        )
     }
 
     @Test

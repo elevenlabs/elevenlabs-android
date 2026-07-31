@@ -52,6 +52,14 @@ class WebSocketConnection(
 
     private val disconnectCallbackInvoked = AtomicBoolean(false)
 
+    /**
+     * Set right before we initiate a socket close from [disconnect]. Lets [listener]
+     * distinguish a close we asked for (user-initiated) from one the remote side
+     * initiated on its own (agent ending the conversation, server-enforced idle
+     * timeout, etc.) even when both use the WebSocket normal-closure code.
+     */
+    private val closingLocally = AtomicBoolean(false)
+
     @Volatile
     private var conversationIdNotified = false
 
@@ -64,6 +72,7 @@ class WebSocketConnection(
             updateConnectionState(ConnectionState.CONNECTING)
             latestConfig = config
             disconnectCallbackInvoked.set(false)
+            closingLocally.set(false)
             conversationIdNotified = false
 
             val url = buildWebSocketUrl(serverUrl, config.signedUrl, config.agentId)
@@ -87,6 +96,7 @@ class WebSocketConnection(
             messageJob?.cancel()
             messageJob = null
 
+            closingLocally.set(true)
             webSocket?.close(NORMAL_CLOSURE, "client closed")
             webSocket = null
 
@@ -160,14 +170,18 @@ class WebSocketConnection(
 
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
             Log.d("WebSocketConnection", "WebSocket closed: code=$code reason=$reason")
-            // Normal closure (1000) is treated as a user-initiated end. Anything else
-            // (going away, abnormal, server unreachable, etc.) is reported as an error
-            // because we cannot reliably tell from the close code alone whether the
-            // agent ended the conversation gracefully.
-            val details = if (code == NORMAL_CLOSURE) {
-                DisconnectionDetails.User
-            } else {
-                DisconnectionDetails.Error(RuntimeException("WebSocket closed: $code $reason"))
+            // The close code alone can't tell us who ended the conversation: a server-enforced
+            // idle timeout closes with the same normal-closure code (1000) as an explicit
+            // client-side disconnect. `closingLocally` records whether *we* asked for this
+            // close via [disconnect]; only then do we report it as user-initiated. A normal
+            // closure we didn't request came from the remote side (agent ending the
+            // conversation, idle timeout, etc.) and is reported as [DisconnectionDetails.Agent].
+            // Anything else (going away, abnormal, server unreachable, etc.) is reported as an
+            // error.
+            val details = when {
+                closingLocally.get() -> DisconnectionDetails.User
+                code == NORMAL_CLOSURE -> DisconnectionDetails.Agent
+                else -> DisconnectionDetails.Error(RuntimeException("WebSocket closed: $code $reason"))
             }
             updateConnectionState(ConnectionState.DISCONNECTED)
             invokeOnDisconnect(details)
