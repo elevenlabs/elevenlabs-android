@@ -82,10 +82,11 @@ internal object ConversationClientImpl {
             appContext = context,
             overrides = LiveKitOverrides(
                 audioOptions = AudioOptions(
+                    // null lets LiveKit apply its own default (pre-existing behavior)
                     audioOutputType = if (finalConfig.useMediaStream) {
                         AudioType.MediaAudioType()
                     } else {
-                        AudioType.CallAudioType()
+                        null
                     },
                     javaAudioDeviceModuleCustomizer = { builder ->
                         builder.setSampleRate(finalConfig.audioInputSampleRate)
