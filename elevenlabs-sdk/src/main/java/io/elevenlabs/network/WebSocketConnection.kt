@@ -53,12 +53,18 @@ class WebSocketConnection(
     private val disconnectCallbackInvoked = AtomicBoolean(false)
 
     /**
-     * Set right before we initiate a socket close from [disconnect]. Lets [listener]
-     * distinguish a close we asked for (user-initiated) from one the remote side
-     * initiated on its own (agent ending the conversation, server-enforced idle
-     * timeout, etc.) even when both use the WebSocket normal-closure code.
+     * The listener owning the live socket, claimed before the socket is created and
+     * released before it is closed. Every other listener is stale and its callbacks are
+     * ignored, because okhttp keeps reading after [WebSocket.close] until the peer answers
+     * - reporting an EOFException through [WebSocketListener.onFailure] if the peer drops
+     * the connection first - and a reconnect would otherwise let the previous socket
+     * disturb the new session.
+     *
+     * Releasing it before we close also records *who* ended the conversation: a callback
+     * that is still current cannot be the result of a local [disconnect].
      */
-    private val closingLocally = AtomicBoolean(false)
+    @Volatile
+    private var activeListener: ConnectionListener? = null
 
     @Volatile
     private var conversationIdNotified = false
@@ -72,17 +78,21 @@ class WebSocketConnection(
             updateConnectionState(ConnectionState.CONNECTING)
             latestConfig = config
             disconnectCallbackInvoked.set(false)
-            closingLocally.set(false)
             conversationIdNotified = false
 
             val url = buildWebSocketUrl(serverUrl, config.signedUrl, config.agentId)
             Log.d("WebSocketConnection", "Connecting to $url")
 
             val request = Request.Builder().url(url).build()
-            webSocket = client.newWebSocket(request, listener)
+            // Take ownership before the socket exists, so an immediate callback is never
+            // mistaken for a stale one.
+            val connectionListener = ConnectionListener()
+            activeListener = connectionListener
+            webSocket = client.newWebSocket(request, connectionListener)
 
             startMessageProcessing()
         } catch (e: Exception) {
+            activeListener = null
             invokeOnDisconnect(DisconnectionDetails.Error(e))
             updateConnectionState(ConnectionState.ERROR)
             throw RuntimeException("Failed to open WebSocket", e)
@@ -91,12 +101,14 @@ class WebSocketConnection(
 
     override fun disconnect(details: DisconnectionDetails?) {
         var disconnectDetails = details ?: DisconnectionDetails.User
+        // Release ownership before closing: everything the socket reports from here on
+        // belongs to a connection we are already reporting as closed.
+        activeListener = null
 
         try {
             messageJob?.cancel()
             messageJob = null
 
-            closingLocally.set(true)
             webSocket?.close(NORMAL_CLOSURE, "client closed")
             webSocket = null
 
@@ -141,8 +153,26 @@ class WebSocketConnection(
         scope.cancel()
     }
 
-    private val listener = object : WebSocketListener() {
+    /**
+     * Listener for a single connection attempt. okhttp holds on to it for the lifetime of
+     * its socket, which outlives the session: it keeps delivering callbacks after we close
+     * and after we have opened a replacement connection. Once [activeListener] points
+     * elsewhere this instance is stale and every callback becomes a no-op, so a finished
+     * connection can neither move the state nor reach the app's callbacks.
+     */
+    private inner class ConnectionListener : WebSocketListener() {
+
+        private val isStale: Boolean
+            get() = activeListener !== this
+
         override fun onOpen(webSocket: WebSocket, response: Response) {
+            if (isStale) {
+                // Disconnected while the handshake was still in flight.
+                Log.d("WebSocketConnection", "WebSocket opened on a stale connection, ignoring")
+                webSocket.close(NORMAL_CLOSURE, "client closed")
+                return
+            }
+
             Log.d("WebSocketConnection", "WebSocket opened")
             updateConnectionState(ConnectionState.CONNECTED)
 
@@ -156,38 +186,62 @@ class WebSocketConnection(
         }
 
         override fun onMessage(webSocket: WebSocket, text: String) {
+            if (isStale) return
             handleIncomingText(text)
         }
 
         override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
+            if (isStale) return
             handleIncomingText(bytes.utf8())
         }
 
         override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
             Log.d("WebSocketConnection", "WebSocket closing: code=$code reason=$reason")
+            // Complete the handshake even when stale, so the peer's close is acknowledged
+            // instead of being left to time out.
             webSocket.close(code, reason)
         }
 
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+            if (isStale) {
+                Log.d(
+                    "WebSocketConnection",
+                    "WebSocket closed on a stale connection, ignoring: code=$code reason=$reason"
+                )
+                return
+            }
+
             Log.d("WebSocketConnection", "WebSocket closed: code=$code reason=$reason")
             // The close code alone can't tell us who ended the conversation: a server-enforced
             // idle timeout closes with the same normal-closure code (1000) as an explicit
-            // client-side disconnect. `closingLocally` records whether *we* asked for this
-            // close via [disconnect]; only then do we report it as user-initiated. A normal
-            // closure we didn't request came from the remote side (agent ending the
-            // conversation, idle timeout, etc.) and is reported as [DisconnectionDetails.Agent].
-            // Anything else (going away, abnormal, server unreachable, etc.) is reported as an
-            // error.
-            val details = when {
-                closingLocally.get() -> DisconnectionDetails.User
-                code == NORMAL_CLOSURE -> DisconnectionDetails.Agent
-                else -> DisconnectionDetails.Error(RuntimeException("WebSocket closed: $code $reason"))
+            // client-side disconnect. Reaching this point already rules out the latter -
+            // [disconnect] releases ownership before closing, so a local close arrives here
+            // stale and is reported as [DisconnectionDetails.User] by [disconnect] itself.
+            // A normal closure we didn't request therefore came from the remote side (agent
+            // ending the conversation, idle timeout, etc.) and is reported as
+            // [DisconnectionDetails.Agent]. Anything else (going away, abnormal, server
+            // unreachable, etc.) is reported as an error.
+            val details = if (code == NORMAL_CLOSURE) {
+                DisconnectionDetails.Agent
+            } else {
+                DisconnectionDetails.Error(RuntimeException("WebSocket closed: $code $reason"))
             }
             updateConnectionState(ConnectionState.DISCONNECTED)
             invokeOnDisconnect(details)
         }
 
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+            if (isStale) {
+                // Expected after a client-initiated close: the peer usually drops the
+                // connection before its close frame reaches us, which okhttp surfaces as an
+                // EOFException. That connection already ended cleanly, so it is not an error.
+                Log.d(
+                    "WebSocketConnection",
+                    "WebSocket failure on a stale connection, ignoring: $t"
+                )
+                return
+            }
+
             Log.e("WebSocketConnection", "WebSocket failure: ${t.message}", t)
             updateConnectionState(ConnectionState.ERROR)
             val cause = if (t is Exception) t else RuntimeException(t)
