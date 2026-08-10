@@ -59,6 +59,9 @@ class WebSocketConnection(
      * - reporting an EOFException through [WebSocketListener.onFailure] if the peer drops
      * the connection first - and a reconnect would otherwise let the previous socket
      * disturb the new session.
+     *
+     * Releasing it before we close also records *who* ended the conversation: a callback
+     * that is still current cannot be the result of a local [disconnect].
      */
     @Volatile
     private var activeListener: ConnectionListener? = null
@@ -209,12 +212,17 @@ class WebSocketConnection(
             }
 
             Log.d("WebSocketConnection", "WebSocket closed: code=$code reason=$reason")
-            // Normal closure (1000) is treated as a user-initiated end. Anything else
-            // (going away, abnormal, server unreachable, etc.) is reported as an error
-            // because we cannot reliably tell from the close code alone whether the
-            // agent ended the conversation gracefully.
+            // The close code alone can't tell us who ended the conversation: a server-enforced
+            // idle timeout closes with the same normal-closure code (1000) as an explicit
+            // client-side disconnect. Reaching this point already rules out the latter -
+            // [disconnect] releases ownership before closing, so a local close arrives here
+            // stale and is reported as [DisconnectionDetails.User] by [disconnect] itself.
+            // A normal closure we didn't request therefore came from the remote side (agent
+            // ending the conversation, idle timeout, etc.) and is reported as
+            // [DisconnectionDetails.Agent]. Anything else (going away, abnormal, server
+            // unreachable, etc.) is reported as an error.
             val details = if (code == NORMAL_CLOSURE) {
-                DisconnectionDetails.User
+                DisconnectionDetails.Agent
             } else {
                 DisconnectionDetails.Error(RuntimeException("WebSocket closed: $code $reason"))
             }
