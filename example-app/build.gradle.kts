@@ -2,6 +2,8 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.paparazzi)
 }
 
 android {
@@ -28,15 +30,27 @@ applicationId = "io.elevenlabs.example"
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions {
-        jvmTarget = "1.8"
+        jvmTarget = "17"
     }
     buildFeatures {
         compose = true
     }
+}
+
+ksp {
+    arg("skipPrivatePreviews", "true")
+}
+
+tasks.withType<Test>().configureEach {
+    jvmArgs(
+        "--add-opens=java.base/java.lang=ALL-UNNAMED",
+        "--add-opens=java.base/java.lang.invoke=ALL-UNNAMED",
+        "--add-opens=java.base/java.lang.reflect=ALL-UNNAMED",
+    )
 }
 
 dependencies {
@@ -78,4 +92,9 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+
+    // Showkase catalog (browser in debug) + annotation/processor for screenshot pipeline
+    implementation(libs.showkase.annotation)
+    implementation(libs.showkase)
+    ksp(libs.showkase.processor)
 }

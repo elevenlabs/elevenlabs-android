@@ -36,6 +36,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import io.elevenlabs.example.ui.AppTheme
+import io.elevenlabs.example.ui.EchoTheme
 import io.elevenlabs.example.ui.StartScreen
 import io.elevenlabs.example.ui.TextChatScreen
 import io.elevenlabs.example.ui.VoiceScreen
@@ -96,7 +97,7 @@ private fun AppRoot(viewModel: ConversationViewModel) {
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
         if (granted) {
-            context.getSharedPreferences(PREFS_NAME, ComponentActivity.MODE_PRIVATE)
+            context.getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE)
                 .edit()
                 .putBoolean(PREF_KEY_AUDIO_PERMISSION, true)
                 .apply()
@@ -132,21 +133,23 @@ private fun AppRoot(viewModel: ConversationViewModel) {
 
     Box(modifier = Modifier.fillMaxSize()) {
         when {
-            showStart -> StartScreen(
-                textOnlyMode = textOnlyMode,
-                onToggleTextOnly = { textOnlyMode = it },
-                status = effectiveStatus,
-                onConnect = {
-                    if (textOnlyMode) {
-                        viewModel.startConversation(context, textOnly = true)
-                    } else if (hasWorkingMicPermission(context)) {
-                        viewModel.startConversation(context, textOnly = false)
-                    } else {
-                        Log.d("MainActivity", "Requesting RECORD_AUDIO permission for voice mode")
-                        permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                    }
-                },
-            )
+            showStart -> EchoTheme {
+                StartScreen(
+                    textOnlyMode = textOnlyMode,
+                    onToggleTextOnly = { textOnlyMode = it },
+                    status = effectiveStatus,
+                    onConnect = {
+                        if (textOnlyMode) {
+                            viewModel.startConversation(context, textOnly = true)
+                        } else if (hasWorkingMicPermission(context)) {
+                            viewModel.startConversation(context, textOnly = false)
+                        } else {
+                            Log.d("MainActivity", "Requesting RECORD_AUDIO permission for voice mode")
+                            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                        }
+                    },
+                )
+            }
 
             textOnlyMode -> TextChatScreen(
                 status = effectiveStatus,
@@ -218,7 +221,7 @@ private fun hasWorkingMicPermission(context: android.content.Context): Boolean {
     val systemPermission = androidx.core.content.ContextCompat.checkSelfPermission(
         context, Manifest.permission.RECORD_AUDIO,
     ) == PackageManager.PERMISSION_GRANTED
-    val workingFlag = context.getSharedPreferences(PREFS_NAME, ComponentActivity.MODE_PRIVATE)
+    val workingFlag = context.getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE)
         .getBoolean(PREF_KEY_AUDIO_PERMISSION, false)
     return systemPermission && workingFlag
 }

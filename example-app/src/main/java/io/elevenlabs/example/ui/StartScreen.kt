@@ -9,9 +9,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -20,6 +24,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.airbnb.android.showkase.annotation.ShowkaseComposable
 import io.elevenlabs.example.R
 import io.elevenlabs.models.ConversationStatus
 
@@ -36,60 +41,82 @@ fun StartScreen(
     modifier: Modifier = Modifier,
 ) {
     val isConnecting = status == ConversationStatus.CONNECTING
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = 24.dp, vertical = 32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+    Surface(
+        modifier = modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background,
     ) {
-        Image(
-            painter = painterResource(id = R.drawable.elevenlabs_logo),
-            contentDescription = "ElevenLabs Logo",
+        Column(
             modifier = Modifier
-                .height(48.dp)
-                .fillMaxWidth(0.7f),
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = "Android Example App",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-        )
-
-        Spacer(Modifier.height(40.dp))
-
-
-        Button(
-            onClick = onConnect,
-            enabled = !isConnecting,
-            modifier = Modifier.fillMaxWidth(),
+                .fillMaxSize()
+                .padding(horizontal = 24.dp, vertical = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
         ) {
-            Text(text = if (isConnecting) "Connecting…" else "Connect")
-        }
-
-        Spacer(Modifier.height(16.dp))
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                text = "Use Text-Only Mode",
-                style = MaterialTheme.typography.bodyMedium,
+            Image(
+                painter = painterResource(id = R.drawable.elevenlabs_logo),
+                contentDescription = "ElevenLabs Logo",
+                modifier = Modifier
+                    .height(48.dp)
+                    .fillMaxWidth(0.7f),
             )
-            Switch(checked = textOnlyMode, onCheckedChange = onToggleTextOnly)
-        }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "Android Example App",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onBackground,
+            )
 
+            Spacer(Modifier.height(40.dp))
+
+            Button(
+                onClick = onConnect,
+                enabled = !isConnecting,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                ),
+            ) {
+                Text(text = if (isConnecting) "Connecting…" else "Connect")
+            }
+
+            Spacer(Modifier.height(16.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = "Use Text-Only Mode",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+                Switch(
+                    checked = textOnlyMode,
+                    onCheckedChange = onToggleTextOnly,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                        checkedTrackColor = MaterialTheme.colorScheme.primary,
+                        uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant,
+                    ),
+                )
+            }
+        }
     }
 }
 
 @Preview(showBackground = true, name = "Disconnected — voice")
+@ShowkaseComposable(name = "Start — voice", group = "Echo / StartScreen")
 @Composable
-private fun StartScreenPreviewDisconnected() {
-    AppTheme {
+internal fun StartScreenPreviewDisconnected() {
+    EchoTheme {
         StartScreen(
             textOnlyMode = false,
             onToggleTextOnly = {},
@@ -100,9 +127,10 @@ private fun StartScreenPreviewDisconnected() {
 }
 
 @Preview(showBackground = true, name = "Disconnected — text-only")
+@ShowkaseComposable(name = "Start — text-only", group = "Echo / StartScreen")
 @Composable
-private fun StartScreenPreviewTextOnly() {
-    AppTheme {
+internal fun StartScreenPreviewTextOnly() {
+    EchoTheme {
         StartScreen(
             textOnlyMode = true,
             onToggleTextOnly = {},
@@ -113,9 +141,10 @@ private fun StartScreenPreviewTextOnly() {
 }
 
 @Preview(showBackground = true, name = "Connecting")
+@ShowkaseComposable(name = "Start — connecting", group = "Echo / StartScreen")
 @Composable
-private fun StartScreenPreviewConnecting() {
-    AppTheme {
+internal fun StartScreenPreviewConnecting() {
+    EchoTheme {
         StartScreen(
             textOnlyMode = false,
             onToggleTextOnly = {},
