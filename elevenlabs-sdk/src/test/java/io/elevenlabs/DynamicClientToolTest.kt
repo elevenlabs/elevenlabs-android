@@ -3,7 +3,14 @@ package io.elevenlabs
 import io.elevenlabs.audio.AudioManager
 import io.elevenlabs.models.ConversationEvent
 import io.elevenlabs.models.OutgoingEvent
+import io.elevenlabs.network.BaseConnection
 import io.mockk.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -107,5 +114,41 @@ class DynamicClientToolTest {
         assertEquals("complex-789", event.toolCallId)
         assertEquals(jsonResult, event.result)
         assertFalse(event.isError)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `session automatically fails unhandled tool call when callback is absent`() = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+        try {
+            val connection = mockk<BaseConnection>(relaxed = true)
+            val onMessage = slot<(String) -> Unit>()
+            every { connection.setOnMessageListener(capture(onMessage)) } just Runs
+            coEvery { connection.connect(any(), any()) } just Runs
+
+            val session = ConversationSessionImpl(
+                context = mockk(relaxed = true),
+                config = ConversationConfig(agentId = "agent-id", textOnly = true),
+                connection = connection,
+                audioManager = audioManager,
+                toolRegistry = toolRegistry
+            )
+            session.start()
+
+            onMessage.captured(
+                """{"type":"client_tool_call","client_tool_call":{"tool_name":"missing","tool_call_id":"call-id","parameters":{},"expects_response":true}}"""
+            )
+
+            verify {
+                connection.sendMessage(match {
+                    it is OutgoingEvent.ClientToolResult &&
+                        it.toolCallId == "call-id" &&
+                        it.isError
+                })
+            }
+            session.endSession()
+        } finally {
+            Dispatchers.resetMain()
+        }
     }
 }

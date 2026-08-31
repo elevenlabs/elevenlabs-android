@@ -46,9 +46,7 @@ internal class ConversationSessionImpl(
         onCanSendFeedbackChange = { canSend ->
             try { config.onCanSendFeedbackChange?.invoke(canSend) } catch (_: Throwable) {}
         },
-        onUnhandledClientToolCall = { call ->
-            try { config.onUnhandledClientToolCall?.invoke(call) } catch (_: Throwable) {}
-        },
+        onUnhandledClientToolCall = config.onUnhandledClientToolCall,
         onVadScore = { score ->
             try { config.onVadScore?.invoke(score) } catch (_: Throwable) {}
         },
