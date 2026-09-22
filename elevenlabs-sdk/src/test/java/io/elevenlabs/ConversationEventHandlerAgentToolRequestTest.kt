@@ -4,8 +4,12 @@ import io.elevenlabs.audio.AudioManager
 import io.elevenlabs.models.ConversationEvent
 import io.elevenlabs.models.OutgoingEvent
 import io.mockk.mockk
-import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -19,6 +23,7 @@ import org.junit.Test
  * `client_tool_result`, otherwise a single invocation fires the tool twice
  * (the first time with empty parameters).
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class ConversationEventHandlerAgentToolRequestTest {
 
     private lateinit var audioManager: AudioManager
@@ -27,6 +32,10 @@ class ConversationEventHandlerAgentToolRequestTest {
 
     @Before
     fun setup() {
+        // The handler dispatches its tool-execution work onto Dispatchers.Main.
+        // Install an unconfined dispatcher so that work runs eagerly inline,
+        // making the assertions deterministic without manual scheduler advances.
+        Dispatchers.setMain(UnconfinedTestDispatcher())
         audioManager = mockk(relaxed = true)
         toolRegistry = ClientToolRegistry()
         outgoingEvents.clear()
@@ -35,6 +44,7 @@ class ConversationEventHandlerAgentToolRequestTest {
     @After
     fun teardown() {
         toolRegistry.cleanup()
+        Dispatchers.resetMain()
     }
 
     private fun handler(
@@ -69,8 +79,6 @@ class ConversationEventHandlerAgentToolRequestTest {
                 eventId = 38
             )
         )
-        // The handler launches on its own scope; give it a turn to run.
-        advanceUntilIdle()
 
         assertEquals("launchFlightSearchV2", notified?.toolName)
         assertEquals("call_1", notified?.toolCallId)
@@ -100,7 +108,6 @@ class ConversationEventHandlerAgentToolRequestTest {
                 expectsResponse = true
             )
         )
-        advanceUntilIdle()
 
         assertEquals("client_tool_call must still execute the registered tool", 1, executed)
         assertTrue(outgoingEvents.any { it is OutgoingEvent.ClientToolResult })
@@ -136,7 +143,6 @@ class ConversationEventHandlerAgentToolRequestTest {
                 expectsResponse = true
             )
         )
-        advanceUntilIdle()
 
         assertEquals("tool must run exactly once, not twice", 1, executed)
         val results = outgoingEvents.filterIsInstance<OutgoingEvent.ClientToolResult>()
