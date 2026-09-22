@@ -42,7 +42,8 @@ object ConversationEventParser {
                 "agent_chat_response_part" -> parseAgentChatResponsePart(jsonObject)
                 "internal_tentative_agent_response" -> parseTentativeAgentResponse(jsonObject)
                 "agent_response_metadata" -> parseAgentResponseMetadata(jsonObject)
-                "client_tool_call", "agent_tool_request" -> parseClientToolCall(jsonObject)
+                "client_tool_call" -> parseClientToolCall(jsonObject)
+                "agent_tool_request" -> parseAgentToolRequest(jsonObject)
                 "agent_tool_response" -> parseAgentToolResponse(jsonObject)
                 "vad_score" -> parseVadScore(jsonObject)
                 "interruption" -> parseInterruption(jsonObject)
@@ -119,14 +120,15 @@ object ConversationEventParser {
     }
 
     /**
-     * Parse client tool call event
-     * Handles both "client_tool_call" and "agent_tool_request" event formats
+     * Parse client tool call event.
+     *
+     * Handles the "client_tool_call" event, which carries the tool parameters
+     * and triggers client-side tool execution. The "agent_tool_request" event
+     * is handled separately by [parseAgentToolRequest] — it is a notification
+     * only and carries no parameters.
      */
     private fun parseClientToolCall(jsonObject: JsonObject): ConversationEvent.ClientToolCall {
-        // Payloads can be nested under "client_tool_call", "agent_tool_request", or be flat
-        val obj = jsonObject.getAsJsonObject("client_tool_call")
-            ?: jsonObject.getAsJsonObject("agent_tool_request")
-            ?: jsonObject
+        val obj = jsonObject.getAsJsonObject("client_tool_call") ?: jsonObject
 
         val parametersJson = obj.get("parameters")?.asJsonObject
         val parameters = mutableMapOf<String, Any>()
@@ -169,6 +171,28 @@ object ConversationEventParser {
             parameters = parameters,
             toolCallId = obj.get("tool_call_id")?.asString ?: "",
             expectsResponse = expectsResponse,
+        )
+    }
+
+    /**
+     * Parse an "agent_tool_request" event.
+     *
+     * This is a notification that the agent is requesting a tool of any type
+     * (client, webhook, or mcp). Unlike "client_tool_call", it carries no
+     * parameters and does not request client-side execution — it only signals
+     * that a tool call has been initiated. The actual execution request for
+     * client tools arrives separately as a "client_tool_call" event.
+     *
+     * Matches payload:
+     * {"type":"agent_tool_request","agent_tool_request":{"tool_name":"...","tool_call_id":"...","tool_type":"client","event_id":38}}
+     */
+    private fun parseAgentToolRequest(jsonObject: JsonObject): ConversationEvent.AgentToolRequest {
+        val obj = jsonObject.getAsJsonObject("agent_tool_request") ?: jsonObject
+        return ConversationEvent.AgentToolRequest(
+            toolName = obj.get("tool_name")?.asString ?: "",
+            toolCallId = obj.get("tool_call_id")?.asString ?: "",
+            toolType = obj.get("tool_type")?.asString ?: "",
+            eventId = obj.parseEventId(),
         )
     }
 

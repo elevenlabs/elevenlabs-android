@@ -314,6 +314,7 @@ Both parameters are optional and default to the standard ElevenLabs production e
 
 - **onCanSendFeedbackChange(canSend: Boolean)**: Enable/disable feedback buttons based on whether feedback can be sent.
 - **onUnhandledClientToolCall(call)**: Agent attempted to call a client tool not registered on the device.
+- **onAgentToolRequest(request)**: Notification that the agent is requesting a tool of any type (`client`, `webhook`, or `mcp`). This is a notification only — it carries no parameters and does not trigger tool execution. The actual execution request for client tools arrives separately as a `client_tool_call` (handled by your registered tools or `onUnhandledClientToolCall`). Use this for UI cues such as showing a "thinking" indicator while a tool runs.
 - **onAgentToolResponse(toolName: String, toolCallId: String, toolType: String, isError: Boolean)**: Agent tool execution completed (server-side or client-side).
 
 ### Audio & Metadata Callbacks
@@ -346,6 +347,8 @@ val config = ConversationConfig(
 When the agent issues a `client_tool_call`, the SDK executes the matching tool and responds with a `client_tool_result`. If the tool is not registered:
 - If `onUnhandledClientToolCall` callback is provided, it will be invoked and you must handle the response manually using `sendToolResult()`
 - If no callback is provided and the tool expects a response, an automatic failure will be sent to prevent the agent from hanging
+
+> **Note:** The server may also emit an `agent_tool_request` event for the same invocation. That event is a notification only (no parameters) and is delivered through `onAgentToolRequest`; it does **not** trigger tool execution. The SDK treats the two events as distinct so a single tool call never fires twice.
 
 ### Dynamic Client Tools
 

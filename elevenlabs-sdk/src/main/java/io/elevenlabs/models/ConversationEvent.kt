@@ -114,6 +114,11 @@ sealed class ConversationEvent {
     /**
      * Event representing a tool call from the agent
      *
+     * This is the event that actually carries the tool parameters and triggers
+     * client-side tool execution. It is distinct from [AgentToolRequest], which
+     * is only a notification that the agent is requesting a tool of any type
+     * (client, webhook, or mcp) and carries no parameters.
+     *
      * @param toolName Name of the tool to execute
      * @param parameters Parameters to pass to the tool
      * @param toolCallId Unique identifier for this tool call
@@ -124,6 +129,29 @@ sealed class ConversationEvent {
         val parameters: Map<String, Any>,
         val toolCallId: String,
         val expectsResponse: Boolean = false,
+    ) : ConversationEvent()
+
+    /**
+     * Notification that the agent is requesting a tool of any type (client,
+     * webhook, or mcp).
+     *
+     * Unlike [ClientToolCall], this event carries no parameters and does not
+     * request client-side execution — it only signals that a tool call has been
+     * initiated. The actual execution request for client tools arrives
+     * separately as a [ClientToolCall]. Treating both events as a single
+     * `ClientToolCall` (as the server may emit both) causes the client tool to
+     * fire twice for one invocation, the first time with empty parameters.
+     *
+     * @param toolName Name of the tool being requested
+     * @param toolCallId Unique identifier for this tool call
+     * @param toolType Type of tool ("client", "webhook", or "mcp")
+     * @param eventId Server event id for this request
+     */
+    data class AgentToolRequest(
+        val toolName: String,
+        val toolCallId: String,
+        val toolType: String,
+        val eventId: Int? = null,
     ) : ConversationEvent()
 
     /**

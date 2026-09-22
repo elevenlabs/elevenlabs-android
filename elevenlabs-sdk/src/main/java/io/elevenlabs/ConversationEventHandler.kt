@@ -20,6 +20,7 @@ class ConversationEventHandler(
     private val messageCallback: (OutgoingEvent) -> Unit,
     private val onCanSendFeedbackChange: ((Boolean) -> Unit)? = null,
     private val onUnhandledClientToolCall: ((ConversationEvent.ClientToolCall) -> Unit)? = null,
+    private val onAgentToolRequest: ((ConversationEvent.AgentToolRequest) -> Unit)? = null,
     private val onVadScore: ((Float) -> Unit)? = null,
     private val onAudioAlignment: ((Map<String, Any>) -> Unit)? = null,
     private val onAgentResponseMetadata: ((Map<String, Any>) -> Unit)? = null,
@@ -65,6 +66,7 @@ class ConversationEventHandler(
                 is ConversationEvent.TentativeUserTranscript -> handleTentativeUserTranscript(event)
                 is ConversationEvent.TentativeAgentResponse -> handleTentativeAgentResponse(event)
                 is ConversationEvent.ClientToolCall -> handleClientToolCall(event)
+                is ConversationEvent.AgentToolRequest -> handleAgentToolRequest(event)
                 is ConversationEvent.VadScore -> handleVadScore(event)
                 is ConversationEvent.AudioAlignment -> handleAudioAlignment(event)
                 is ConversationEvent.AgentResponseMetadata -> handleAgentResponseMetadata(event)
@@ -310,6 +312,21 @@ class ConversationEventHandler(
             }
             Log.d("ConvEventHandler", "Tool executed: ${event.toolName} -> ${if (result == null) "NO_RESPONSE" else if (result.success) "SUCCESS" else "FAILED"}")
         }
+    }
+
+    /**
+     * Handle agent tool request events.
+     *
+     * This is a notification that the agent is requesting a tool of any type
+     * (client, webhook, or mcp). It does NOT carry parameters and does not
+     * request client-side execution — the actual execution request for client
+     * tools arrives separately as a [ConversationEvent.ClientToolCall]. We only
+     * forward the notification to the app layer; never execute the tool here,
+     * otherwise a single invocation would fire twice (once with empty params).
+     */
+    private fun handleAgentToolRequest(event: ConversationEvent.AgentToolRequest) {
+        Log.d("ConvEventHandler", "Agent tool request: ${event.toolName} (${event.toolType})")
+        try { onAgentToolRequest?.invoke(event) } catch (_: Throwable) {}
     }
 
     /**
