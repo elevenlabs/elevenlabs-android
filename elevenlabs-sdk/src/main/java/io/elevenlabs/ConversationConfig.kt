@@ -143,8 +143,24 @@ data class PromptOverrides(
     val prompt: String? = null
 )
 
+/**
+ * Per-conversation TTS overrides, sent in `conversation_config_override.tts`.
+ *
+ * Every field is nullable and only non-null fields are serialized — the platform asks callers to
+ * omit what they do not want to override rather than send nulls.
+ *
+ * These apply at conversation initiation only; there is no protocol message to change them
+ * mid-conversation. Each field must also be enabled in the agent's Security → Overrides settings,
+ * or the platform ignores it.
+ */
 data class TtsOverrides(
-    val voiceId: String? = null
+    val voiceId: String? = null,
+    /** Speech rate, 0.7–1.2. Below 1 slows down, above 1 speeds up. */
+    val speed: Double? = null,
+    /** Voice stability, 0.0–1.0. Lower is more expressive, higher more monotone. */
+    val stability: Double? = null,
+    /** Similarity boost, 0.0–1.0. How closely to adhere to the original voice. */
+    val similarityBoost: Double? = null
 )
 
 data class ConversationOverrides(

@@ -31,6 +31,9 @@ object ConversationOverridesBuilder {
             // tts
             val ttsObj = JSONObject()
             ovr.tts?.voiceId?.let { ttsObj.put("voice_id", it) }
+            ovr.tts?.speed?.let { ttsObj.put("speed", it) }
+            ovr.tts?.stability?.let { ttsObj.put("stability", it) }
+            ovr.tts?.similarityBoost?.let { ttsObj.put("similarity_boost", it) }
             if (ttsObj.length() > 0) overrideObj.put("tts", ttsObj)
 
             // conversation
