@@ -1,7 +1,6 @@
 package io.elevenlabs
 
 import io.elevenlabs.audio.AudioManager
-import io.elevenlabs.models.ConversationEvent
 import io.elevenlabs.network.BaseConnection
 import io.mockk.Runs
 import io.mockk.coEvery
