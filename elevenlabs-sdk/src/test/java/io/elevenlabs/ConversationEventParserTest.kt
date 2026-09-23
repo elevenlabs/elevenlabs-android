@@ -108,7 +108,7 @@ class ConversationEventParserTest {
     // ==================== agent_tool_request event type tests ====================
 
     @Test
-    fun `agent_tool_request with tool_type client should default expects_response to true`() {
+    fun `agent_tool_request parses into a notification AgentToolRequest, not a ClientToolCall`() {
         val json = """
             {
                 "type": "agent_tool_request",
@@ -124,37 +124,17 @@ class ConversationEventParserTest {
         val event = ConversationEventParser.parseIncomingEvent(json)
 
         assertNotNull(event)
-        assertTrue(event is ConversationEvent.ClientToolCall)
-        val toolCall = event as ConversationEvent.ClientToolCall
-        assertEquals("launchFlightSearchV2", toolCall.toolName)
-        assertEquals("launchFlightSearchV2_fb9db75a2e074a6a960a6e1ce4190330", toolCall.toolCallId)
-        assertTrue("expects_response should default to true for agent_tool_request", toolCall.expectsResponse)
+        assertTrue("agent_tool_request must NOT map to ClientToolCall (see issue #76)", event !is ConversationEvent.ClientToolCall)
+        assertTrue(event is ConversationEvent.AgentToolRequest)
+        val request = event as ConversationEvent.AgentToolRequest
+        assertEquals("launchFlightSearchV2", request.toolName)
+        assertEquals("launchFlightSearchV2_fb9db75a2e074a6a960a6e1ce4190330", request.toolCallId)
+        assertEquals("client", request.toolType)
+        assertEquals(38, request.eventId)
     }
 
     @Test
-    fun `agent_tool_request with explicit expects_response false should return false`() {
-        val json = """
-            {
-                "type": "agent_tool_request",
-                "agent_tool_request": {
-                    "tool_name": "FireAndForgetTool",
-                    "tool_call_id": "fire_123",
-                    "tool_type": "client",
-                    "expects_response": false
-                }
-            }
-        """.trimIndent()
-
-        val event = ConversationEventParser.parseIncomingEvent(json)
-
-        assertNotNull(event)
-        assertTrue(event is ConversationEvent.ClientToolCall)
-        val toolCall = event as ConversationEvent.ClientToolCall
-        assertFalse("expects_response should be false when explicitly set", toolCall.expectsResponse)
-    }
-
-    @Test
-    fun `agent_tool_request without tool_type should still default expects_response to true`() {
+    fun `agent_tool_request with missing tool_type defaults to empty string`() {
         val json = """
             {
                 "type": "agent_tool_request",
@@ -169,9 +149,35 @@ class ConversationEventParserTest {
         val event = ConversationEventParser.parseIncomingEvent(json)
 
         assertNotNull(event)
-        assertTrue(event is ConversationEvent.ClientToolCall)
-        val toolCall = event as ConversationEvent.ClientToolCall
-        assertTrue("expects_response should default to true even without tool_type", toolCall.expectsResponse)
+        assertTrue(event is ConversationEvent.AgentToolRequest)
+        val request = event as ConversationEvent.AgentToolRequest
+        assertEquals("SomeTool", request.toolName)
+        assertEquals("some_123", request.toolCallId)
+        assertEquals("", request.toolType)
+        assertEquals(42, request.eventId)
+    }
+
+    @Test
+    fun `agent_tool_request never carries parameters and never triggers a client tool call`() {
+        // Regression guard for issue #76: a stray "parameters" field on an
+        // agent_tool_request must not turn it into a ClientToolCall, and must
+        // not be exposed as execution parameters.
+        val json = """
+            {
+                "type": "agent_tool_request",
+                "agent_tool_request": {
+                    "tool_name": "FireAndForgetTool",
+                    "tool_call_id": "fire_123",
+                    "tool_type": "client",
+                    "event_id": 7
+                }
+            }
+        """.trimIndent()
+
+        val event = ConversationEventParser.parseIncomingEvent(json)
+
+        assertTrue(event is ConversationEvent.AgentToolRequest)
+        assertTrue(event !is ConversationEvent.ClientToolCall)
     }
 
     // ==================== Parameter parsing tests ====================

@@ -2,6 +2,7 @@ package io.elevenlabs
 
 import io.elevenlabs.models.AudioFrame
 import io.elevenlabs.models.AgentResponsePartType
+import io.elevenlabs.models.ConversationEvent.AgentToolRequest
 import io.elevenlabs.models.ConversationEvent.ClientToolCall
 import io.elevenlabs.models.ConversationMode
 import io.elevenlabs.models.ConversationStatus
@@ -75,6 +76,7 @@ data class ConversationConfig(
     val onStatusChange: ((status: ConversationStatus) -> Unit)? = null,
     val onCanSendFeedbackChange: ((canSend: Boolean) -> Unit)? = null,
     val onUnhandledClientToolCall: ((ClientToolCall) -> Unit)? = null,
+    val onAgentToolRequest: ((AgentToolRequest) -> Unit)? = null,
     val onVadScore: ((score: Float) -> Unit)? = null,
     val onAudioLevelChanged: ((level: Float) -> Unit)? = null,
     val onAudioFrame: ((frame: AudioFrame) -> Unit)? = null,
