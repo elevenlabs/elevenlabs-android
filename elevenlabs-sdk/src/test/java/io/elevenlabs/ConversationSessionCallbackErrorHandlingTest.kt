@@ -20,14 +20,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
-/**
- * Verifies that a throwing user-provided callback is logged (not silently swallowed) and does
- * not crash the session or break the rest of the event stream.
- *
- * The single error-handling layer lives in [ConversationSessionImpl]'s adapter lambdas; the
- * [ConversationEventHandler] invokes callbacks directly. These tests drive events through the
- * session so the adapter wrapping is exercised.
- */
+/** Verifies a throwing user-provided callback is logged, not swallowed, and doesn't crash the session or break the event stream. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ConversationSessionCallbackErrorHandlingTest {
 
@@ -71,7 +64,6 @@ class ConversationSessionCallbackErrorHandlingTest {
     fun `throwing onVadScore is logged and does not crash the session or break the event stream`() = runTest {
         Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
         try {
-            var vadCalls = 0
             var agentResponses = 0
             val session = startSession(
                 ConversationConfig(
@@ -82,11 +74,7 @@ class ConversationSessionCallbackErrorHandlingTest {
                 )
             )
 
-            // First event: the throwing callback must not propagate.
             deliver("""{"type":"vad_score","vad_score_event":{"vad_score":0.5}}""")
-            assertEquals(0, vadCalls) // sanity: the lambda itself never returns normally
-
-            // Subsequent events must still flow and invoke their (non-throwing) callbacks.
             deliver("""{"type":"agent_response","agent_response_event":{"agent_response":"hi","event_id":1}}""")
             assertEquals(1, agentResponses)
 
@@ -114,7 +102,6 @@ class ConversationSessionCallbackErrorHandlingTest {
             deliver("""{"type":"agent_response","agent_response_event":{"agent_response":"hi","event_id":1}}""")
             assertEquals(0, agentResponses)
 
-            // The stream continues: a later event still invokes its callback.
             deliver("""{"type":"vad_score","vad_score_event":{"vad_score":0.9}}""")
             assertEquals(1, vadCalls)
 
@@ -142,13 +129,11 @@ class ConversationSessionCallbackErrorHandlingTest {
                 )
             )
 
-            // Unregistered tool triggers onUnhandledClientToolCall; the throw must be contained.
             deliver(
                 """{"type":"client_tool_call","client_tool_call":{"tool_name":"missing","tool_call_id":"call-1","parameters":{},"expects_response":false}}"""
             )
             assertEquals(1, unhandledCalls)
 
-            // The session survives and keeps processing events.
             deliver("""{"type":"vad_score","vad_score_event":{"vad_score":0.2}}""")
             assertEquals(1, vadCalls)
 
@@ -204,13 +189,11 @@ class ConversationSessionCallbackErrorHandlingTest {
                 )
             )
 
-            // agent_tool_request is a notification-only event; the throw must be contained.
             deliver(
                 """{"type":"agent_tool_request","agent_tool_request":{"tool_name":"search","tool_call_id":"call-1","tool_type":"client","event_id":38}}"""
             )
             assertEquals(1, toolRequests)
 
-            // The session survives and keeps processing events.
             deliver("""{"type":"vad_score","vad_score_event":{"vad_score":0.7}}""")
             assertEquals(1, vadCalls)
 
