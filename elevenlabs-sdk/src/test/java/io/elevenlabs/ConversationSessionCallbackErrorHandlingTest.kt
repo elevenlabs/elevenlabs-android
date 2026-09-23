@@ -186,4 +186,38 @@ class ConversationSessionCallbackErrorHandlingTest {
             Dispatchers.resetMain()
         }
     }
+
+    @Test
+    fun `throwing onAgentToolRequest is logged and does not crash the session or break the event stream`() = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+        try {
+            var toolRequests = 0
+            var vadCalls = 0
+            val session = startSession(
+                ConversationConfig(
+                    agentId = "agent-id",
+                    textOnly = true,
+                    onAgentToolRequest = { request ->
+                        toolRequests++
+                        throw RuntimeException("tool request boom for ${request.toolName}")
+                    },
+                    onVadScore = { vadCalls++ }
+                )
+            )
+
+            // agent_tool_request is a notification-only event; the throw must be contained.
+            deliver(
+                """{"type":"agent_tool_request","agent_tool_request":{"tool_name":"search","tool_call_id":"call-1","tool_type":"client","event_id":38}}"""
+            )
+            assertEquals(1, toolRequests)
+
+            // The session survives and keeps processing events.
+            deliver("""{"type":"vad_score","vad_score_event":{"vad_score":0.7}}""")
+            assertEquals(1, vadCalls)
+
+            session.endSession()
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
 }
