@@ -92,7 +92,7 @@ class ConversationEventHandler(
         appendAgentResponsePart(text = event.text, eventId = event.eventId, isStop = event.partType == "stop")
 
         AgentResponsePartType.fromString(event.partType)?.let { partType ->
-            try { onAgentResponsePartEvent?.invoke(partType, event.text, event.eventId) } catch (_: Throwable) {}
+            onAgentResponsePartEvent?.invoke(partType, event.text, event.eventId)
         }
 
         when (event.partType) {
@@ -104,7 +104,7 @@ class ConversationEventHandler(
             }
             "delta" -> {
                 if (event.text.isNotEmpty()) {
-                    try { onAgentResponse?.invoke(event.text) } catch (_: Throwable) {}
+                    onAgentResponse?.invoke(event.text)
                 }
             }
             "stop" -> {
@@ -118,29 +118,29 @@ class ConversationEventHandler(
      */
     private suspend fun handleTentativeUserTranscript(event: ConversationEvent.TentativeUserTranscript) {
         applyTentativeUserTranscript(content = event.userTranscript, eventId = event.eventId)
-        try { onUserTranscript?.invoke(event.userTranscript) } catch (_: Throwable) {}
-        try { onTentativeUserTranscriptEvent?.invoke(event.userTranscript, event.eventId) } catch (_: Throwable) {}
+        onUserTranscript?.invoke(event.userTranscript)
+        onTentativeUserTranscriptEvent?.invoke(event.userTranscript, event.eventId)
     }
 
     /**
      * Handle tentative agent responses (partial)
      */
     private fun handleTentativeAgentResponse(event: ConversationEvent.TentativeAgentResponse) {
-        try { onAgentResponse?.invoke(event.tentativeAgentResponse) } catch (_: Throwable) {}
+        onAgentResponse?.invoke(event.tentativeAgentResponse)
     }
 
     /**
      * Handle audio alignment events
      */
     private fun handleAudioAlignment(event: ConversationEvent.AudioAlignment) {
-        try { onAudioAlignment?.invoke(event.alignment) } catch (_: Throwable) {}
+        onAudioAlignment?.invoke(event.alignment)
     }
 
     /**
      * Handle agent response metadata events
      */
     private fun handleAgentResponseMetadata(event: ConversationEvent.AgentResponseMetadata) {
-        try { onAgentResponseMetadata?.invoke(event.metadata) } catch (_: Throwable) {}
+        onAgentResponseMetadata?.invoke(event.metadata)
     }
 
     /**
@@ -160,20 +160,12 @@ class ConversationEventHandler(
             try {
                 audioManager.startPlayback()
             } catch (e: Exception) {
-            Log.d("ConvEventHandler", "Failed to start audio playback: ${e.message}")
+                Log.d("ConvEventHandler", "Failed to start audio playback: ${e.message}")
             }
         }
 
-        try {
-            onAgentResponse?.invoke(event.agentResponse)
-        } catch (e: Exception) {
-            Log.e("ConvEventHandler", "Error in onAgentResponse callback: ${e.message}", e)
-        }
-        try {
-            onAgentResponseEvent?.invoke(event.agentResponse, event.eventId)
-        } catch (e: Exception) {
-            Log.e("ConvEventHandler", "Error in onAgentResponseEvent callback: ${e.message}", e)
-        }
+        onAgentResponse?.invoke(event.agentResponse)
+        onAgentResponseEvent?.invoke(event.agentResponse, event.eventId)
     }
 
     /**
@@ -181,38 +173,18 @@ class ConversationEventHandler(
      */
     private suspend fun handleUserTranscript(event: ConversationEvent.UserTranscript) {
         applyUserTranscript(content = event.userTranscript, eventId = event.eventId)
-        try {
-            onUserTranscript?.invoke(event.userTranscript)
-        } catch (e: Exception) {
-            Log.e("ConvEventHandler", "Error in onUserTranscript callback: ${e.message}", e)
-        }
-        try {
-            onUserTranscriptEvent?.invoke(event.userTranscript, event.eventId)
-        } catch (e: Exception) {
-            Log.e("ConvEventHandler", "Error in onUserTranscriptEvent callback: ${e.message}", e)
-        }
+        onUserTranscript?.invoke(event.userTranscript)
+        onUserTranscriptEvent?.invoke(event.userTranscript, event.eventId)
     }
 
     private fun handleAgentResponseCorrection(event: ConversationEvent.AgentResponseCorrection) {
         applyAgentResponse(content = event.correctedAgentResponse, eventId = event.eventId)
-        try {
-            onAgentResponseCorrection?.invoke(event.originalAgentResponse, event.correctedAgentResponse)
-        } catch (e: Exception) {
-            Log.e("ConvEventHandler", "Error in onAgentResponseCorrection callback: ${e.message}", e)
-        }
-        try {
-            onAgentResponseCorrectionEvent?.invoke(event.correctedAgentResponse, event.eventId)
-        } catch (e: Exception) {
-            Log.e("ConvEventHandler", "Error in onAgentResponseCorrectionEvent callback: ${e.message}", e)
-        }
+        onAgentResponseCorrection?.invoke(event.originalAgentResponse, event.correctedAgentResponse)
+        onAgentResponseCorrectionEvent?.invoke(event.correctedAgentResponse, event.eventId)
     }
 
     private fun handleAgentToolResponse(event: ConversationEvent.AgentToolResponse) {
-        try {
-            onAgentToolResponse?.invoke(event.toolName, event.toolCallId, event.toolType, event.isError)
-        } catch (e: Exception) {
-            Log.e("ConvEventHandler", "Error in onAgentToolResponse callback: ${e.message}", e)
-        }
+        onAgentToolResponse?.invoke(event.toolName, event.toolCallId, event.toolType, event.isError)
 
         if (event.toolName == "end_call") {
 
@@ -231,11 +203,7 @@ class ConversationEventHandler(
     }
 
     private fun handleConversationInitiationMetadata(event: ConversationEvent.ConversationInitiationMetadata) {
-        try {
-            onConversationInitiationMetadata?.invoke(event.conversationId, event.agentOutputAudioFormat, event.userInputAudioFormat)
-        } catch (e: Exception) {
-            Log.e("ConvEventHandler", "Error in onConversationInitiationMetadata callback: ${e.message}", e)
-        }
+        onConversationInitiationMetadata?.invoke(event.conversationId, event.agentOutputAudioFormat, event.userInputAudioFormat)
     }
 
     private fun handleInterruption(event: ConversationEvent.Interruption) {
@@ -243,11 +211,7 @@ class ConversationEventHandler(
         _conversationMode.value = ConversationMode.LISTENING
         onCanSendFeedbackChange?.invoke(false)
 
-        try {
-            onInterruption?.invoke(event.eventId)
-        } catch (e: Exception) {
-            Log.e("ConvEventHandler", "Error in onInterruption callback: ${e.message}", e)
-        }
+        onInterruption?.invoke(event.eventId)
     }
 
     /**
@@ -255,11 +219,7 @@ class ConversationEventHandler(
      */
     private fun handleServerError(event: ConversationEvent.ServerError) {
         Log.e("ConvEventHandler", "Server error (${event.code}): ${event.message ?: "unknown"}")
-        try {
-            onError?.invoke(event.code, event.message)
-        } catch (e: Exception) {
-            Log.e("ConvEventHandler", "Error in onError callback: ${e.message}", e)
-        }
+        onError?.invoke(event.code, event.message)
     }
 
     /**
@@ -270,7 +230,7 @@ class ConversationEventHandler(
             val toolExists = toolRegistry.isToolRegistered(event.toolName)
             if (!toolExists) {
                 // Notify app layer about unhandled tool call
-                try { onUnhandledClientToolCall?.invoke(event) } catch (_: Throwable) {}
+                onUnhandledClientToolCall?.invoke(event)
 
                 // If no callback is registered and agent expects a response, send failure to prevent hanging
                 if (onUnhandledClientToolCall == null && event.expectsResponse) {
@@ -326,7 +286,7 @@ class ConversationEventHandler(
      */
     private fun handleAgentToolRequest(event: ConversationEvent.AgentToolRequest) {
         Log.d("ConvEventHandler", "Agent tool request: ${event.toolName} (${event.toolType})")
-        try { onAgentToolRequest?.invoke(event) } catch (_: Throwable) {}
+        onAgentToolRequest?.invoke(event)
     }
 
     /**
@@ -350,11 +310,7 @@ class ConversationEventHandler(
      */
     private fun handleVadScore(event: ConversationEvent.VadScore) {
         // Invoke the onVadScore callback if provided
-        try {
-            onVadScore?.invoke(event.score)
-        } catch (e: Exception) {
-            Log.d("ConvEventHandler", "Error in onVadScore callback: ${e.message}")
-        }
+        onVadScore?.invoke(event.score)
     }
 
     /**

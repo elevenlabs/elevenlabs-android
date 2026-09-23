@@ -44,59 +44,81 @@ internal class ConversationSessionImpl(
             connection.sendMessage(event)
         },
         onCanSendFeedbackChange = { canSend ->
-            try { config.onCanSendFeedbackChange?.invoke(canSend) } catch (_: Throwable) {}
+            try { config.onCanSendFeedbackChange?.invoke(canSend) }
+            catch (t: Throwable) { Log.w("ConversationSession", "onCanSendFeedbackChange callback threw", t) }
         },
-        onUnhandledClientToolCall = config.onUnhandledClientToolCall,
+        onUnhandledClientToolCall = config.onUnhandledClientToolCall?.let { callback ->
+            { event ->
+                try { callback.invoke(event) }
+                catch (t: Throwable) { Log.w("ConversationSession", "onUnhandledClientToolCall callback threw", t) }
+            }
+        },
         onAgentToolRequest = { request ->
-            try { config.onAgentToolRequest?.invoke(request) } catch (_: Throwable) {}
+            try { config.onAgentToolRequest?.invoke(request) }
+            catch (t: Throwable) { Log.w("ConversationSession", "onAgentToolRequest callback threw", t) }
         },
         onVadScore = { score ->
-            try { config.onVadScore?.invoke(score) } catch (_: Throwable) {}
+            try { config.onVadScore?.invoke(score) }
+            catch (t: Throwable) { Log.w("ConversationSession", "onVadScore callback threw", t) }
         },
         onAudioAlignment = { alignment ->
-            try { config.onAudioAlignment?.invoke(alignment) } catch (_: Throwable) {}
+            try { config.onAudioAlignment?.invoke(alignment) }
+            catch (t: Throwable) { Log.w("ConversationSession", "onAudioAlignment callback threw", t) }
         },
         onAgentResponseMetadata = { metadata ->
-            try { config.onAgentResponseMetadata?.invoke(metadata) } catch (_: Throwable) {}
+            try { config.onAgentResponseMetadata?.invoke(metadata) }
+            catch (t: Throwable) { Log.w("ConversationSession", "onAgentResponseMetadata callback threw", t) }
         },
         onUserTranscript = { transcript ->
-            try { config.onUserTranscript?.invoke(transcript) } catch (_: Throwable) {}
+            try { config.onUserTranscript?.invoke(transcript) }
+            catch (t: Throwable) { Log.w("ConversationSession", "onUserTranscript callback threw", t) }
         },
         onAgentResponse = { response ->
-            try { config.onAgentResponse?.invoke(response) } catch (_: Throwable) {}
+            try { config.onAgentResponse?.invoke(response) }
+            catch (t: Throwable) { Log.w("ConversationSession", "onAgentResponse callback threw", t) }
         },
         onAgentResponseCorrection = { original, corrected ->
-            try { config.onAgentResponseCorrection?.invoke(original, corrected) } catch (_: Throwable) {}
+            try { config.onAgentResponseCorrection?.invoke(original, corrected) }
+            catch (t: Throwable) { Log.w("ConversationSession", "onAgentResponseCorrection callback threw", t) }
         },
         onUserTranscriptEvent = { text, eventId ->
-            try { config.onUserTranscriptEvent?.invoke(text, eventId) } catch (_: Throwable) {}
+            try { config.onUserTranscriptEvent?.invoke(text, eventId) }
+            catch (t: Throwable) { Log.w("ConversationSession", "onUserTranscriptEvent callback threw", t) }
         },
         onTentativeUserTranscriptEvent = { text, eventId ->
-            try { config.onTentativeUserTranscriptEvent?.invoke(text, eventId) } catch (_: Throwable) {}
+            try { config.onTentativeUserTranscriptEvent?.invoke(text, eventId) }
+            catch (t: Throwable) { Log.w("ConversationSession", "onTentativeUserTranscriptEvent callback threw", t) }
         },
         onAgentResponseEvent = { text, eventId ->
-            try { config.onAgentResponseEvent?.invoke(text, eventId) } catch (_: Throwable) {}
+            try { config.onAgentResponseEvent?.invoke(text, eventId) }
+            catch (t: Throwable) { Log.w("ConversationSession", "onAgentResponseEvent callback threw", t) }
         },
         onAgentResponsePartEvent = { partType, text, eventId ->
-            try { config.onAgentResponsePartEvent?.invoke(partType, text, eventId) } catch (_: Throwable) {}
+            try { config.onAgentResponsePartEvent?.invoke(partType, text, eventId) }
+            catch (t: Throwable) { Log.w("ConversationSession", "onAgentResponsePartEvent callback threw", t) }
         },
         onAgentResponseCorrectionEvent = { text, eventId ->
-            try { config.onAgentResponseCorrectionEvent?.invoke(text, eventId) } catch (_: Throwable) {}
+            try { config.onAgentResponseCorrectionEvent?.invoke(text, eventId) }
+            catch (t: Throwable) { Log.w("ConversationSession", "onAgentResponseCorrectionEvent callback threw", t) }
         },
         onAgentToolResponse = { toolName, toolCallId, toolType, isError ->
-            try { config.onAgentToolResponse?.invoke(toolName, toolCallId, toolType, isError) } catch (_: Throwable) {}
+            try { config.onAgentToolResponse?.invoke(toolName, toolCallId, toolType, isError) }
+            catch (t: Throwable) { Log.w("ConversationSession", "onAgentToolResponse callback threw", t) }
         },
         onConversationInitiationMetadata = { conversationId, agentOutputFormat, userInputFormat ->
-            try { config.onConversationInitiationMetadata?.invoke(conversationId, agentOutputFormat, userInputFormat) } catch (_: Throwable) {}
+            try { config.onConversationInitiationMetadata?.invoke(conversationId, agentOutputFormat, userInputFormat) }
+            catch (t: Throwable) { Log.w("ConversationSession", "onConversationInitiationMetadata callback threw", t) }
         },
         onInterruption = { eventId ->
-            try { config.onInterruption?.invoke(eventId) } catch (_: Throwable) {}
+            try { config.onInterruption?.invoke(eventId) }
+            catch (t: Throwable) { Log.w("ConversationSession", "onInterruption callback threw", t) }
         },
         onEndCall = {
             endSession()
         },
         onError = { code, message ->
-            try { config.onError?.invoke(code, message) } catch (_: Throwable) {}
+            try { config.onError?.invoke(code, message) }
+            catch (t: Throwable) { Log.w("ConversationSession", "onError callback threw", t) }
         }
     )
 
