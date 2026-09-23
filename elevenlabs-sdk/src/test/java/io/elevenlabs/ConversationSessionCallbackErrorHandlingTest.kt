@@ -3,7 +3,6 @@ package io.elevenlabs
 import io.elevenlabs.audio.AudioManager
 import io.elevenlabs.network.BaseConnection
 import io.mockk.Runs
-import io.mockk.capture
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.just
