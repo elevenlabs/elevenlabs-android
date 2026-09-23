@@ -3,6 +3,7 @@ package io.elevenlabs
 import io.elevenlabs.audio.AudioManager
 import io.elevenlabs.network.BaseConnection
 import io.mockk.Runs
+import io.mockk.capture
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.just
@@ -34,14 +35,13 @@ class ConversationSessionCallbackErrorHandlingTest {
     private lateinit var audioManager: AudioManager
     private lateinit var toolRegistry: ClientToolRegistry
     private lateinit var connection: BaseConnection
-    private lateinit var onMessage: slot<(String) -> Unit>
+    private val onMessage = slot<(String) -> Unit>()
 
     @Before
     fun setup() {
         audioManager = mockk(relaxed = true)
         toolRegistry = ClientToolRegistry()
         connection = mockk<BaseConnection>(relaxed = true)
-        onMessage = slot()
         every { connection.setOnMessageListener(capture(onMessage)) } just Runs
         coEvery { connection.connect(any(), any()) } just Runs
     }
