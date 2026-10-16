@@ -118,6 +118,17 @@ class ConversationSessionModeTest {
         session.endSession()
     }
 
+    @Test
+    fun `text-only mode leaves the agent listening after a response that was not streamed`() = runTest {
+        val session = startSession(textOnly = true)
+
+        onMessage.captured(agentResponse("Hello, this is a short test greeting.", eventId = 1))
+
+        assertEquals(LISTENING, session.mode.value)
+        assertEquals(emptyList<ConversationMode>(), callbackModes)
+        session.endSession()
+    }
+
     private suspend fun startSession(textOnly: Boolean): ConversationSession {
         val audioManager = mockk<AudioManager>(relaxed = true)
         val session = ConversationSessionImpl(

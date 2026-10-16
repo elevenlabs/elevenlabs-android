@@ -152,7 +152,7 @@ class ConversationEventHandler(
     private suspend fun handleAgentResponse(event: ConversationEvent.AgentResponse) {
         applyAgentResponse(content = event.agentResponse, eventId = event.eventId)
 
-        if (!modeFollowsAgentAudio) setMode(ConversationMode.SPEAKING)
+        if (!modeFollowsAgentAudio) setMode(ConversationMode.LISTENING)
 
         // Enable feedback on agent reply (event id is handled elsewhere)
         onCanSendFeedbackChange?.invoke(true)
