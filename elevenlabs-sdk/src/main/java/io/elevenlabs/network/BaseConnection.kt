@@ -54,6 +54,15 @@ abstract class BaseConnection {
     abstract fun setOnConnectionStateListener(listener: (ConnectionState) -> Unit)
 
     /**
+     * Set a listener for whether the agent is currently speaking.
+     *
+     * Only transports that carry the agent's audio report this; the default does nothing.
+     *
+     * @param listener Callback that receives true while the agent speaks and false otherwise
+     */
+    open fun setOnAgentSpeakingListener(listener: (Boolean) -> Unit) {}
+
+    /**
      * Get the current connection state
      */
     abstract val connectionState: ConnectionState

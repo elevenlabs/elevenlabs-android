@@ -6,6 +6,7 @@ import io.elevenlabs.models.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.update
 
 /**
@@ -36,7 +37,9 @@ class ConversationEventHandler(
     private val onConversationInitiationMetadata: ((String, String, String) -> Unit)? = null,
     private val onInterruption: ((Int) -> Unit)? = null,
     private val onEndCall: (suspend () -> Unit)? = null,
-    private val onError: ((Int, String?) -> Unit)? = null
+    private val onError: ((Int, String?) -> Unit)? = null,
+    private val onModeChange: ((ConversationMode) -> Unit)? = null,
+    private val modeFollowsAgentAudio: Boolean = false
 ) {
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -97,7 +100,7 @@ class ConversationEventHandler(
 
         when (event.partType) {
             "start" -> {
-                _conversationMode.value = ConversationMode.SPEAKING
+                if (!modeFollowsAgentAudio) setMode(ConversationMode.SPEAKING)
                 if (!audioManager.isPlaying()) {
                     try { audioManager.startPlayback() } catch (_: Throwable) {}
                 }
@@ -108,7 +111,7 @@ class ConversationEventHandler(
                 }
             }
             "stop" -> {
-                _conversationMode.value = ConversationMode.LISTENING
+                if (!modeFollowsAgentAudio) setMode(ConversationMode.LISTENING)
             }
         }
     }
@@ -149,8 +152,7 @@ class ConversationEventHandler(
     private suspend fun handleAgentResponse(event: ConversationEvent.AgentResponse) {
         applyAgentResponse(content = event.agentResponse, eventId = event.eventId)
 
-        // Update conversation mode to speaking
-        _conversationMode.value = ConversationMode.SPEAKING
+        if (!modeFollowsAgentAudio) setMode(ConversationMode.LISTENING)
 
         // Enable feedback on agent reply (event id is handled elsewhere)
         onCanSendFeedbackChange?.invoke(true)
@@ -240,7 +242,7 @@ class ConversationEventHandler(
 
     private fun handleInterruption(event: ConversationEvent.Interruption) {
         // Switch to listening when agent is interrupted; disable feedback availability
-        _conversationMode.value = ConversationMode.LISTENING
+        setMode(ConversationMode.LISTENING)
         onCanSendFeedbackChange?.invoke(false)
 
         try {
@@ -449,6 +451,23 @@ class ConversationEventHandler(
      */
     fun getCurrentMode(): ConversationMode = _conversationMode.value
 
+    /**
+     * Update the mode from the transport's report of whether the agent is speaking.
+     * In voice sessions this is the source of truth for [conversationMode].
+     */
+    fun onAgentSpeakingChanged(isSpeaking: Boolean) {
+        setMode(if (isSpeaking) ConversationMode.SPEAKING else ConversationMode.LISTENING)
+    }
+
+    private fun setMode(mode: ConversationMode) {
+        if (_conversationMode.getAndUpdate { mode } == mode) return
+        try {
+            onModeChange?.invoke(mode)
+        } catch (e: Exception) {
+            Log.e("ConvEventHandler", "Error in onModeChange callback: ${e.message}", e)
+        }
+    }
+
     /** Accumulates a streaming `agent_chat_response_part` into its turn's message. */
     private fun appendAgentResponsePart(text: String, eventId: Int?, isStop: Boolean) {
         _messages.update { current ->
@@ -540,6 +559,7 @@ class ConversationEventHandler(
      * Clean up resources
      */
     fun cleanup() {
+        setMode(ConversationMode.LISTENING)
         scope.cancel()
         _lastFeedbackSentForEventIdInt = null
     }
