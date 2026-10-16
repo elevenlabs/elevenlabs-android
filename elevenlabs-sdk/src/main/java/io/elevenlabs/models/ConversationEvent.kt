@@ -208,6 +208,24 @@ sealed class ConversationEvent {
         val message: String?
     ) : ConversationEvent()
 
+    /**
+     * The agent finished its response, including any tool calls it was waiting for
+     *
+     * @param eventId Event id of the response
+     */
+    data class AgentResponseComplete(
+        val eventId: Int
+    ) : ConversationEvent()
+
+    /**
+     * A guardrail was triggered; the server ends the conversation afterwards
+     *
+     * @param guardrailName Name of the guardrail, when the server reports it
+     */
+    data class GuardrailTriggered(
+        val guardrailName: String?
+    ) : ConversationEvent()
+
 }
 
 /**
