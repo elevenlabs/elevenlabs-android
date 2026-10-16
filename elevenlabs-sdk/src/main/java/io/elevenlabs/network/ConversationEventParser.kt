@@ -1,6 +1,7 @@
 package io.elevenlabs.network
 
 import android.util.Log
+import io.elevenlabs.models.AudioAlignment
 import io.elevenlabs.models.ConversationEvent
 import io.elevenlabs.models.ConversationMode
 import io.elevenlabs.models.ConversationStatus
@@ -226,7 +227,7 @@ object ConversationEventParser {
             // Treat as alignment-only payload forwarded on 'audio' type
             val mapType = object : com.google.gson.reflect.TypeToken<Map<String, Any>>() {}.type
             val alignmentMap: Map<String, Any> = gson.fromJson(obj, mapType)
-            ConversationEvent.AudioAlignment(alignment = alignmentMap)
+            ConversationEvent.AudioAlignment(alignment = alignmentMap, typed = parseTypedAlignment(obj))
         } else {
             val b64 = when {
                 obj.has("audio_base64") -> obj.get("audio_base64")?.asString ?: ""
@@ -236,7 +237,8 @@ object ConversationEventParser {
             val eventId = obj.get("event_id")?.asInt ?: 0
             ConversationEvent.Audio(
                 eventId = eventId,
-                audioBase64 = b64
+                audioBase64 = b64,
+                alignment = if (hasAlignment) parseTypedAlignment(obj) else null
             )
         }
     }
@@ -298,7 +300,26 @@ object ConversationEventParser {
         val content = jsonObject.getAsJsonObject("audio_alignment_event") ?: jsonObject.deepCopy().apply { remove("type") }
         val mapType = object : TypeToken<Map<String, Any>>() {}.type
         val alignmentMap: Map<String, Any> = gson.fromJson(content, mapType)
-        return ConversationEvent.AudioAlignment(alignment = alignmentMap)
+        return ConversationEvent.AudioAlignment(alignment = alignmentMap, typed = parseTypedAlignment(content))
+    }
+
+    /**
+     * Read `event_id` and `alignment.{chars, char_start_times_ms, char_durations_ms}` from an audio or
+     * audio alignment event body. Returns null unless all three lists are present, non-empty and the same length.
+     */
+    private fun parseTypedAlignment(content: JsonObject): AudioAlignment? {
+        return try {
+            val alignment = content.getAsJsonObject("alignment") ?: return null
+            val chars = alignment.getAsJsonArray("chars")?.map { it.asString } ?: return null
+            val starts = alignment.getAsJsonArray("char_start_times_ms")?.map { it.asDouble.toInt() } ?: return null
+            val durations = alignment.getAsJsonArray("char_durations_ms")?.map { it.asDouble.toInt() } ?: return null
+            if (chars.isEmpty() || starts.size != chars.size || durations.size != chars.size) return null
+            val eventId = content.get("event_id")?.takeUnless { it.isJsonNull }?.asInt
+            AudioAlignment(eventId = eventId, chars = chars, charStartTimesMs = starts, charDurationsMs = durations)
+        } catch (e: Exception) {
+            Log.d("ConversationEventParser", "Ignoring malformed alignment: ${e.message}")
+            null
+        }
     }
 
     /**
