@@ -103,6 +103,10 @@ data class ConversationConfig(
     val onInterruption: ((eventId: Int) -> Unit)? = null,
     val onDisconnect: ((details: DisconnectionDetails) -> Unit)? = null,
     val onError: ((code: Int, message: String?) -> Unit)? = null,
+    // The agent finished its response, including pending tool calls, with the response's event id.
+    val onAgentResponseComplete: ((eventId: Int) -> Unit)? = null,
+    // A guardrail was triggered; the server ends the conversation afterwards.
+    val onGuardrailTriggered: ((guardrailName: String?) -> Unit)? = null,
     val audioConfiguration: AudioPipelineConfiguration? = null,
     val useMediaStream: Boolean = false
 ) {
