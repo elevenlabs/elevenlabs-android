@@ -559,6 +559,7 @@ class ConversationEventHandler(
      * Clean up resources
      */
     fun cleanup() {
+        setMode(ConversationMode.LISTENING)
         scope.cancel()
         _lastFeedbackSentForEventIdInt = null
     }

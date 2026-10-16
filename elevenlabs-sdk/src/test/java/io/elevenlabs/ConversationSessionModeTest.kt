@@ -129,6 +129,17 @@ class ConversationSessionModeTest {
         session.endSession()
     }
 
+    @Test
+    fun `ending the session while the agent speaks returns to listening`() = runTest {
+        val session = startSession(textOnly = false)
+
+        onAgentSpeaking.captured(true)
+        session.endSession()
+
+        assertEquals(LISTENING, session.mode.value)
+        assertEquals(listOf(SPEAKING, LISTENING), callbackModes)
+    }
+
     private suspend fun startSession(textOnly: Boolean): ConversationSession {
         val audioManager = mockk<AudioManager>(relaxed = true)
         val session = ConversationSessionImpl(
