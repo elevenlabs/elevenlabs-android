@@ -279,7 +279,7 @@ class ConversationEventHandler(
                         result = "Tool '${event.toolName}' not registered and no handler provided",
                         isError = true
                     )
-                    messageCallback(failureEvent)
+                    sendSafely(failureEvent)
                     Log.d("ConvEventHandler", "Tool '${event.toolName}' not registered - sent automatic failure response")
                 } else {
                     Log.d("ConvEventHandler", "Tool '${event.toolName}' not registered - waiting for manual response via sendToolResult()")
@@ -287,11 +287,8 @@ class ConversationEventHandler(
                 return@launch
             }
 
-            val result = try {
-                toolRegistry.executeTool(event.toolName, event.parameters)
-            } catch (e: Exception) {
-                ClientToolResult.failure("Tool execution failed: ${e.message}")
-            }
+            // Rethrows when cleanup() cancelled the scope, so no answer is sent after the session ended.
+            val result = toolRegistry.executeTool(event.toolName, event.parameters)
 
             // Send result back to agent if response is expected and result is not null
             if (event.expectsResponse && result != null) {
@@ -308,7 +305,7 @@ class ConversationEventHandler(
                     isError = !result.success
                 )
 
-                messageCallback(toolResultEvent)
+                sendSafely(toolResultEvent)
             }
             Log.d("ConvEventHandler", "Tool executed: ${event.toolName} -> ${if (result == null) "NO_RESPONSE" else if (result.success) "SUCCESS" else "FAILED"}")
         }
@@ -336,12 +333,19 @@ class ConversationEventHandler(
         Log.d("ConvEventHandler", "Ping received: eventId=${event.eventId}, pingMs=${event.pingMs}")
         // Reply with pong using same event id
         scope.launch {
-            try {
-                val pong = OutgoingEvent.Pong(eventId = event.eventId)
-                messageCallback(pong)
-            } catch (e: Exception) {
-                Log.d("ConvEventHandler", "Failed to send pong: ${e.message}")
-            }
+            sendSafely(OutgoingEvent.Pong(eventId = event.eventId))
+        }
+    }
+
+    /**
+     * Sends an event from a coroutine the SDK started. The connection can close at any time
+     * and nobody can handle the error, so it is only logged.
+     */
+    private fun sendSafely(event: OutgoingEvent) {
+        try {
+            messageCallback(event)
+        } catch (e: Exception) {
+            Log.w("ConvEventHandler", "Failed to send ${event::class.simpleName}: ${e.message}")
         }
     }
 
