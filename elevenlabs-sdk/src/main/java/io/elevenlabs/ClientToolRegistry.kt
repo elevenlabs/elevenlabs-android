@@ -77,6 +77,8 @@ class ClientToolRegistry {
         } catch (e: TimeoutCancellationException) {
             ClientToolResult.failure("Tool execution timed out after ${timeoutMs}ms")
         } catch (e: Exception) {
+            // Rethrow if the caller was cancelled. Any other exception is a tool failure.
+            currentCoroutineContext().ensureActive()
             ClientToolResult.failure("Tool execution failed: ${e.message}")
         }
     }
@@ -208,6 +210,7 @@ class ClientToolRegistryBuilder {
                     val result = function(parameters)
                     ClientToolResult.success(result)
                 } catch (e: Exception) {
+                    currentCoroutineContext().ensureActive()
                     ClientToolResult.failure("Function execution failed: ${e.message}")
                 }
             }
