@@ -50,6 +50,9 @@ object ConversationEventParser {
                 "audio_alignment" -> parseAudioAlignment(jsonObject)
                 "ping" -> parsePing(jsonObject)
                 "error" -> parseError(jsonObject)
+                "client_error" -> parseError(jsonObject)
+                "agent_response_complete" -> parseAgentResponseComplete(jsonObject)
+                "guardrail_triggered" -> parseGuardrailTriggered(jsonObject)
                 else -> {
                     handleParsingError(json, IllegalArgumentException("Unknown event type: $eventType"))
                     null
@@ -368,7 +371,25 @@ object ConversationEventParser {
             ?: 1011
         val message = errorEvent?.get("message")?.let { if (it.isJsonNull) null else it.asString }
             ?: jsonObject.get("message")?.let { if (it.isJsonNull) null else it.asString }
+            ?: errorEvent?.get("error_name")?.let { if (it.isJsonNull) null else it.asString }
         return ConversationEvent.ServerError(code = code, message = message)
+    }
+
+    /**
+     * Matches payload: {"type":"agent_response_complete","agent_response_complete_event":{"event_id":12}}
+     */
+    private fun parseAgentResponseComplete(jsonObject: JsonObject): ConversationEvent.AgentResponseComplete {
+        val obj = jsonObject.getAsJsonObject("agent_response_complete_event")
+        return ConversationEvent.AgentResponseComplete(eventId = obj.parseEventId() ?: 0)
+    }
+
+    /**
+     * Matches payload: {"type":"guardrail_triggered","guardrail_triggered_event":{"guardrail_name":"..."}}
+     */
+    private fun parseGuardrailTriggered(jsonObject: JsonObject): ConversationEvent.GuardrailTriggered {
+        val name = jsonObject.getAsJsonObject("guardrail_triggered_event")?.get("guardrail_name")
+            ?.takeUnless { it.isJsonNull }?.asString
+        return ConversationEvent.GuardrailTriggered(guardrailName = name)
     }
 
     /**
