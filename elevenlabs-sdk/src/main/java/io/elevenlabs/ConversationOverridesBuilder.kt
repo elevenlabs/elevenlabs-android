@@ -13,9 +13,8 @@ object ConversationOverridesBuilder {
         val root = JSONObject().put("type", TYPE)
 
         // conversation_config_override
+        val overrideObj = JSONObject()
         config.overrides?.let { ovr ->
-            val overrideObj = JSONObject()
-
             // agent
             val agentObj = JSONObject()
             ovr.agent?.let { agent ->
@@ -32,16 +31,12 @@ object ConversationOverridesBuilder {
             val ttsObj = JSONObject()
             ovr.tts?.voiceId?.let { ttsObj.put("voice_id", it) }
             if (ttsObj.length() > 0) overrideObj.put("tts", ttsObj)
-
-            // conversation
-            val convObj = JSONObject()
-            ovr.conversation?.textOnly?.let { convObj.put("text_only", it) }
-            if (convObj.length() > 0) overrideObj.put("conversation", convObj)
-
-            if (overrideObj.length() > 0) {
-                root.put("conversation_config_override", overrideObj)
-            }
         }
+
+        // conversation: always sent, like the JS SDK, so the server knows whether to run a
+        // text-only conversation even when only the top-level textOnly flag is set
+        overrideObj.put("conversation", JSONObject().put("text_only", config.resolvedTextOnly))
+        root.put("conversation_config_override", overrideObj)
 
         // custom_llm_extra_body
         config.customLlmExtraBody?.let { map ->

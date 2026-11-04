@@ -124,6 +124,14 @@ data class ConversationConfig(
     /** True when the session authenticates with a backend-generated credential. */
     val isPrivateAgent: Boolean
         get() = conversationToken != null || signedUrl != null
+
+    /**
+     * The text-only flag the session actually uses, resolved like the JS SDK: [textOnly] wins
+     * when set, otherwise [ConversationOverrides.textOnly] decides. Because [textOnly] defaults
+     * to false, only `textOnly = true` counts as set.
+     */
+    internal val resolvedTextOnly: Boolean
+        get() = textOnly || overrides?.conversation?.textOnly == true
 }
 
 data class Overrides(

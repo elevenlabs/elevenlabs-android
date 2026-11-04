@@ -37,11 +37,12 @@ internal object ConversationClientImpl {
         config: ConversationConfig,
         context: Context
     ): ConversationSession {
-        validateConfig(config)
-        return if (config.textOnly) {
-            startTextOnlySession(config, context)
+        val resolvedConfig = resolveTextOnly(config)
+        validateConfig(resolvedConfig)
+        return if (resolvedConfig.textOnly) {
+            startTextOnlySession(resolvedConfig, context)
         } else {
-            startVoiceSession(config, context)
+            startVoiceSession(resolvedConfig, context)
         }
     }
 
@@ -166,6 +167,25 @@ internal object ConversationClientImpl {
             }
         }
         return registry
+    }
+
+    /**
+     * Resolve textOnly the same way the JS SDK does so that the transport and the
+     * `text_only` override sent to the server always agree.
+     *
+     * @param config Configuration as provided by the caller
+     * @return Configuration whose [ConversationConfig.textOnly] is the resolved value
+     */
+    internal fun resolveTextOnly(config: ConversationConfig): ConversationConfig {
+        val textOnlyOverride = config.overrides?.conversation?.textOnly
+        if (config.textOnly && textOnlyOverride == false) {
+            Log.w(
+                "ConversationClient",
+                "Conflicting textOnly options provided: true via config.textOnly (will be used) " +
+                    "and false via config.overrides.conversation.textOnly (will be ignored)"
+            )
+        }
+        return config.copy(textOnly = config.resolvedTextOnly)
     }
 
     /**
