@@ -92,6 +92,12 @@ internal class ConversationSessionImpl(
         onInterruption = { eventId ->
             try { config.onInterruption?.invoke(eventId) } catch (_: Throwable) {}
         },
+        onAgentResponseComplete = { eventId ->
+            try { config.onAgentResponseComplete?.invoke(eventId) } catch (_: Throwable) {}
+        },
+        onGuardrailTriggered = { name ->
+            try { config.onGuardrailTriggered?.invoke(name) } catch (_: Throwable) {}
+        },
         onEndCall = {
             endSession()
         },
