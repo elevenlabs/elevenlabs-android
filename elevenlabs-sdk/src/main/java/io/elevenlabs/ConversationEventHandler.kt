@@ -23,6 +23,7 @@ class ConversationEventHandler(
     private val onAgentToolRequest: ((ConversationEvent.AgentToolRequest) -> Unit)? = null,
     private val onVadScore: ((Float) -> Unit)? = null,
     private val onAudioAlignment: ((Map<String, Any>) -> Unit)? = null,
+    private val onAudioAlignmentEvent: ((AudioAlignment) -> Unit)? = null,
     private val onAgentResponseMetadata: ((Map<String, Any>) -> Unit)? = null,
     private val onUserTranscript: ((String) -> Unit)? = null,
     private val onAgentResponse: ((String) -> Unit)? = null,
@@ -134,6 +135,7 @@ class ConversationEventHandler(
      */
     private fun handleAudioAlignment(event: ConversationEvent.AudioAlignment) {
         try { onAudioAlignment?.invoke(event.alignment) } catch (_: Throwable) {}
+        event.typed?.let { alignment -> try { onAudioAlignmentEvent?.invoke(alignment) } catch (_: Throwable) {} }
     }
 
     /**
@@ -228,6 +230,7 @@ class ConversationEventHandler(
 
     private fun handleAudio(event: ConversationEvent.Audio) {
         Log.d("ConvEventHandler", "Audio event: id=${event.eventId}, bytes=${event.audioBase64.length}")
+        event.alignment?.let { alignment -> try { onAudioAlignmentEvent?.invoke(alignment) } catch (_: Throwable) {} }
     }
 
     private fun handleConversationInitiationMetadata(event: ConversationEvent.ConversationInitiationMetadata) {

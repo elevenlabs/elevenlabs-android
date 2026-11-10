@@ -12,7 +12,8 @@ sealed class ConversationEvent {
      * Audio alignment data event (structure can vary; exposed as a map)
      */
     data class AudioAlignment(
-        val alignment: Map<String, Any>
+        val alignment: Map<String, Any>,
+        val typed: io.elevenlabs.models.AudioAlignment? = null
     ) : ConversationEvent()
 
     /**
@@ -74,6 +75,7 @@ sealed class ConversationEvent {
     data class Audio(
         val eventId: Int,
         val audioBase64: String,
+        val alignment: io.elevenlabs.models.AudioAlignment? = null,
     ) : ConversationEvent()
 
     /**

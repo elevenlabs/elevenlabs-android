@@ -1,5 +1,6 @@
 package io.elevenlabs
 
+import io.elevenlabs.models.AudioAlignment
 import io.elevenlabs.models.AudioFrame
 import io.elevenlabs.models.AgentResponsePartType
 import io.elevenlabs.models.ConversationEvent.AgentToolRequest
@@ -80,7 +81,10 @@ data class ConversationConfig(
     val onVadScore: ((score: Float) -> Unit)? = null,
     val onAudioLevelChanged: ((level: Float) -> Unit)? = null,
     val onAudioFrame: ((frame: AudioFrame) -> Unit)? = null,
+    @Deprecated("Use onAudioAlignmentEvent, which reports a typed AudioAlignment with its event id.")
     val onAudioAlignment: ((alignment: Map<String, Any>) -> Unit)? = null,
+    // Character timing of each chunk of the agent's speech, with the event id of its response.
+    val onAudioAlignmentEvent: ((alignment: AudioAlignment) -> Unit)? = null,
     val onAgentResponseMetadata: ((metadata: Map<String, Any>) -> Unit)? = null,
     @Deprecated("Use onUserTranscriptEvent, which also reports the server event id.")
     val onUserTranscript: ((userTranscript: String) -> Unit)? = null,
