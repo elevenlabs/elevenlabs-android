@@ -33,11 +33,6 @@ class LiveKitAudioManager(
     private var audioStateListener: AudioStateListener? = null
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
-    init {
-        // Configure audio session when manager is created
-        AudioUtils.configureAudioSession(context)
-    }
-
     override suspend fun startRecording() {
         if (_isRecording.value) {
             throw IllegalStateException("Already recording")

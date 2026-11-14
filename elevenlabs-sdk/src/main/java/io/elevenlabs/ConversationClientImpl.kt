@@ -3,7 +3,6 @@ package io.elevenlabs
 import android.content.Context
 import android.util.Log
 import io.elevenlabs.BuildConfig
-import io.elevenlabs.audio.AudioSessionManager
 import io.elevenlabs.audio.LiveKitAudioManager
 import io.elevenlabs.audio.NoOpAudioManager
 import io.elevenlabs.audio.SoftwareMuteProcessor
@@ -103,13 +102,10 @@ internal object ConversationClientImpl {
         val connection = WebRTCConnection(context, room)
         Log.d("ConversationClient", "WebRTCConnection initialized")
 
-        val audioSessionManager = AudioSessionManager(context)
         val audioManager = LiveKitAudioManager(context, room, softwareMuteProcessor)
         Log.d("ConversationClient", "LiveKitAudioManager initialized")
 
         val toolRegistry = buildToolRegistry(finalConfig)
-
-        audioSessionManager.configureForVoiceCall()
 
         val session = ConversationSessionImpl(
             context = context,
