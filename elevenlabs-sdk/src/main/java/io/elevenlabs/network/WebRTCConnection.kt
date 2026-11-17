@@ -16,6 +16,7 @@ import io.livekit.android.room.participant.RemoteParticipant
 import io.livekit.android.room.track.LocalAudioTrack
 import io.livekit.android.room.track.RemoteAudioTrack
 import io.livekit.android.room.track.Track
+import io.livekit.android.events.DisconnectReason
 import io.livekit.android.events.RoomEvent
 import io.livekit.android.events.collect
 import kotlinx.coroutines.*
@@ -236,9 +237,7 @@ class WebRTCConnection(
 
                     is RoomEvent.Disconnected -> {
                         Log.d("WebRTCConnection", "LiveKit room disconnected: ${event.reason}")
-                        if (connectionState == ConnectionState.CONNECTED) {
-                            updateConnectionState(ConnectionState.DISCONNECTED)
-                        }
+                        disconnect(disconnectionDetailsFor(event))
                     }
 
                     is RoomEvent.Reconnecting -> {
@@ -300,6 +299,18 @@ class WebRTCConnection(
             disconnect(DisconnectionDetails.Agent)
         }
     }
+
+    /**
+     * A room closed on purpose ended the conversation; any other reason means the connection failed.
+     */
+    private fun disconnectionDetailsFor(event: RoomEvent.Disconnected): DisconnectionDetails =
+        if (event.reason in DELIBERATE_DISCONNECT_REASONS) {
+            DisconnectionDetails.Agent
+        } else {
+            DisconnectionDetails.Error(
+                event.error ?: RuntimeException("LiveKit room disconnected: ${event.reason}")
+            )
+        }
 
     /**
      * Handle track subscribed event
@@ -461,6 +472,15 @@ class WebRTCConnection(
     fun cleanup() {
         disconnect()
         scope.cancel()
+    }
+
+    private companion object {
+        val DELIBERATE_DISCONNECT_REASONS = setOf(
+            DisconnectReason.CLIENT_INITIATED,
+            DisconnectReason.PARTICIPANT_REMOVED,
+            DisconnectReason.ROOM_DELETED,
+            DisconnectReason.ROOM_CLOSED,
+        )
     }
 
     private class AudioFrameSink(
