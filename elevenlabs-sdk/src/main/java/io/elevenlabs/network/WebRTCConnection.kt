@@ -16,6 +16,7 @@ import io.livekit.android.room.participant.RemoteParticipant
 import io.livekit.android.room.track.LocalAudioTrack
 import io.livekit.android.room.track.RemoteAudioTrack
 import io.livekit.android.room.track.Track
+import io.livekit.android.events.DisconnectReason
 import io.livekit.android.events.RoomEvent
 import io.livekit.android.events.collect
 import kotlinx.coroutines.*
@@ -80,6 +81,9 @@ class WebRTCConnection(
         try {
             updateConnectionState(ConnectionState.CONNECTING)
             latestConfig = config
+            // Re-arm here rather than in disconnect(), so repeated disconnect() calls for one
+            // session notify the application only once.
+            disconnectCallbackInvoked = false
 
             // Use provided shared room
             localParticipant = room.localParticipant
@@ -133,9 +137,6 @@ class WebRTCConnection(
 
             // Reset audio level to 0
             _audioLevel.value = 0.0f
-
-            // Reset disconnect callback flag to allow reconnection
-            disconnectCallbackInvoked = false
 
             // Reset to IDLE state to allow reconnection
             updateConnectionState(ConnectionState.IDLE)
@@ -236,9 +237,7 @@ class WebRTCConnection(
 
                     is RoomEvent.Disconnected -> {
                         Log.d("WebRTCConnection", "LiveKit room disconnected: ${event.reason}")
-                        if (connectionState == ConnectionState.CONNECTED) {
-                            updateConnectionState(ConnectionState.DISCONNECTED)
-                        }
+                        disconnect(disconnectionDetailsFor(event))
                     }
 
                     is RoomEvent.Reconnecting -> {
@@ -294,12 +293,34 @@ class WebRTCConnection(
      */
     private fun handleParticipantDisconnected(participant: RemoteParticipant) {
         val identityStr = participant.identity?.value
+        if (identityStr?.startsWith("agent") != true) return
 
-        // If the agent disconnects, shut down the connection with agent disconnect reason
-        if (identityStr?.startsWith("agent") == true) {
-            disconnect(DisconnectionDetails.Agent)
+        // LiveKit also drops every remote participant when the room itself goes down, so the
+        // agent leaving only means the agent ended the conversation while the room stays up.
+        when (room.state) {
+            Room.State.CONNECTED -> disconnect(DisconnectionDetails.Agent)
+            // The room is closing: the RoomEvent.Disconnected that follows carries the reason.
+            Room.State.DISCONNECTED -> Unit
+            // A full reconnect drops the participants: the connection failed.
+            else -> disconnect(
+                DisconnectionDetails.Error(
+                    RuntimeException("Agent dropped out while the room was ${room.state}")
+                )
+            )
         }
     }
+
+    /**
+     * A room closed on purpose ended the conversation; any other reason means the connection failed.
+     */
+    private fun disconnectionDetailsFor(event: RoomEvent.Disconnected): DisconnectionDetails =
+        if (event.reason in DELIBERATE_DISCONNECT_REASONS) {
+            DisconnectionDetails.Agent
+        } else {
+            DisconnectionDetails.Error(
+                event.error ?: RuntimeException("LiveKit room disconnected: ${event.reason}")
+            )
+        }
 
     /**
      * Handle track subscribed event
@@ -461,6 +482,15 @@ class WebRTCConnection(
     fun cleanup() {
         disconnect()
         scope.cancel()
+    }
+
+    private companion object {
+        val DELIBERATE_DISCONNECT_REASONS = setOf(
+            DisconnectReason.CLIENT_INITIATED,
+            DisconnectReason.PARTICIPANT_REMOVED,
+            DisconnectReason.ROOM_DELETED,
+            DisconnectReason.ROOM_CLOSED,
+        )
     }
 
     private class AudioFrameSink(

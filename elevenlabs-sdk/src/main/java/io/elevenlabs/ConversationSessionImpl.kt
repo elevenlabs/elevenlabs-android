@@ -6,6 +6,7 @@ import io.elevenlabs.audio.AudioManager
 import io.elevenlabs.audio.LiveKitAudioManager
 import io.elevenlabs.models.ConversationMode
 import io.elevenlabs.models.ConversationStatus
+import io.elevenlabs.models.DisconnectionDetails
 import io.elevenlabs.models.Message
 import io.elevenlabs.models.toConversationStatus
 import io.elevenlabs.network.BaseConnection
@@ -93,7 +94,7 @@ internal class ConversationSessionImpl(
             try { config.onInterruption?.invoke(eventId) } catch (_: Throwable) {}
         },
         onEndCall = {
-            endSession()
+            endSession(DisconnectionDetails.Agent)
         },
         onError = { code, message ->
             try { config.onError?.invoke(code, message) } catch (_: Throwable) {}
@@ -179,7 +180,9 @@ internal class ConversationSessionImpl(
         }
     }
 
-    override suspend fun endSession() {
+    override suspend fun endSession() = endSession(DisconnectionDetails.User)
+
+    private suspend fun endSession(details: DisconnectionDetails) {
         _status.value = ConversationStatus.DISCONNECTING
 
         val exceptionHandler: Result<*>.(String) -> Unit = { functionName ->
@@ -198,7 +201,7 @@ internal class ConversationSessionImpl(
         audioManager.runCatching { stopPlayback() }.exceptionHandler("stopPlayback")
 
         // Disconnect from network
-        connection.runCatching { disconnect() }.exceptionHandler("disconnect")
+        connection.runCatching { disconnect(details) }.exceptionHandler("disconnect")
 
         // Clean up resources
         eventHandler.runCatching { cleanup() }.exceptionHandler("eventHandler.cleanup")
