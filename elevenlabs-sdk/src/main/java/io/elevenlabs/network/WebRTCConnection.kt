@@ -293,10 +293,20 @@ class WebRTCConnection(
      */
     private fun handleParticipantDisconnected(participant: RemoteParticipant) {
         val identityStr = participant.identity?.value
+        if (identityStr?.startsWith("agent") != true) return
 
-        // If the agent disconnects, shut down the connection with agent disconnect reason
-        if (identityStr?.startsWith("agent") == true) {
-            disconnect(DisconnectionDetails.Agent)
+        // LiveKit also drops every remote participant when the room itself goes down, so the
+        // agent leaving only means the agent ended the conversation while the room stays up.
+        when (room.state) {
+            Room.State.CONNECTED -> disconnect(DisconnectionDetails.Agent)
+            // The room is closing: the RoomEvent.Disconnected that follows carries the reason.
+            Room.State.DISCONNECTED -> Unit
+            // A full reconnect drops the participants: the connection failed.
+            else -> disconnect(
+                DisconnectionDetails.Error(
+                    RuntimeException("Agent dropped out while the room was ${room.state}")
+                )
+            )
         }
     }
 

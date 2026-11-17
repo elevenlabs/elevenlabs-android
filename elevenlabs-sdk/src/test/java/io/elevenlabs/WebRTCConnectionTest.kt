@@ -110,6 +110,48 @@ class WebRTCConnectionTest {
     }
 
     @Test
+    fun `the agent dropping out of a failing room is reported as an error`() {
+        connect()
+
+        // Room.handleDisconnect marks the room DISCONNECTED, drops every remote participant
+        // and only then posts RoomEvent.Disconnected with the reason.
+        every { room.state } returns Room.State.DISCONNECTED
+        emit(agentLeft())
+        emit(roomDisconnected(DisconnectReason.SIGNAL_CLOSE))
+
+        assertEquals(1, disconnects.size)
+        assertTrue(
+            "expected Error, got ${disconnects.single()}",
+            disconnects.single() is DisconnectionDetails.Error
+        )
+    }
+
+    @Test
+    fun `the agent dropping out during a full reconnect is reported as an error`() {
+        connect()
+
+        every { room.state } returns Room.State.RECONNECTING
+        emit(agentLeft())
+
+        assertEquals(1, disconnects.size)
+        assertTrue(
+            "expected Error, got ${disconnects.single()}",
+            disconnects.single() is DisconnectionDetails.Error
+        )
+    }
+
+    @Test
+    fun `the agent dropping out of a room the server deletes is reported as the agent`() {
+        connect()
+
+        every { room.state } returns Room.State.DISCONNECTED
+        emit(agentLeft())
+        emit(roomDisconnected(DisconnectReason.ROOM_DELETED))
+
+        assertEquals(listOf<DisconnectionDetails>(DisconnectionDetails.Agent), disconnects.toList())
+    }
+
+    @Test
     fun `repeated disconnect calls notify the application once`() {
         val connection = connect()
 
