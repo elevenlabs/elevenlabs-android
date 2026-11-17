@@ -144,6 +144,9 @@ internal class ConversationSessionImpl(
             // Set up connection state listener
             connection.setOnConnectionStateListener { connectionState ->
                 _status.value = connectionState.toConversationStatus()
+                if (!connectionState.isActive && !connectionState.isTransitioning) {
+                    eventHandler.resetMode()
+                }
             }
 
             // Text-only sessions use the ConvAI WebSocket endpoint, which lives on the same host

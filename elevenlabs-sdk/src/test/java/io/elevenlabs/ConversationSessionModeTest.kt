@@ -5,6 +5,7 @@ import io.elevenlabs.models.ConversationMode
 import io.elevenlabs.models.ConversationMode.LISTENING
 import io.elevenlabs.models.ConversationMode.SPEAKING
 import io.elevenlabs.network.BaseConnection
+import io.elevenlabs.network.ConnectionState
 import io.mockk.Runs
 import io.mockk.coEvery
 import io.mockk.every
@@ -34,6 +35,7 @@ class ConversationSessionModeTest {
     private lateinit var connection: BaseConnection
     private val onMessage = slot<(String) -> Unit>()
     private val onAgentSpeaking = slot<(Boolean) -> Unit>()
+    private val onConnectionState = slot<(ConnectionState) -> Unit>()
     private val callbackModes = mutableListOf<ConversationMode>()
 
     @Before
@@ -42,6 +44,7 @@ class ConversationSessionModeTest {
         connection = mockk(relaxed = true)
         every { connection.setOnMessageListener(capture(onMessage)) } just Runs
         every { connection.setOnAgentSpeakingListener(capture(onAgentSpeaking)) } just Runs
+        every { connection.setOnConnectionStateListener(capture(onConnectionState)) } just Runs
         coEvery { connection.connect(any(), any()) } just Runs
     }
 
@@ -138,6 +141,29 @@ class ConversationSessionModeTest {
 
         assertEquals(LISTENING, session.mode.value)
         assertEquals(listOf(SPEAKING, LISTENING), callbackModes)
+    }
+
+    @Test
+    fun `a connection closed by the remote side while the agent speaks returns to listening`() = runTest {
+        val session = startSession(textOnly = false)
+
+        onAgentSpeaking.captured(true)
+        onConnectionState.captured(ConnectionState.DISCONNECTED)
+
+        assertEquals(LISTENING, session.mode.value)
+        assertEquals(listOf(SPEAKING, LISTENING), callbackModes)
+        session.endSession()
+    }
+
+    @Test
+    fun `reconnecting keeps the agent speaking`() = runTest {
+        val session = startSession(textOnly = false)
+
+        onAgentSpeaking.captured(true)
+        onConnectionState.captured(ConnectionState.RECONNECTING)
+
+        assertEquals(SPEAKING, session.mode.value)
+        session.endSession()
     }
 
     private suspend fun startSession(textOnly: Boolean): ConversationSession {

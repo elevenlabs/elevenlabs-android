@@ -463,6 +463,10 @@ class ConversationEventHandler(
         setMode(if (isSpeaking) ConversationMode.SPEAKING else ConversationMode.LISTENING)
     }
 
+    fun resetMode() {
+        setMode(ConversationMode.LISTENING)
+    }
+
     private fun setMode(mode: ConversationMode) {
         if (_conversationMode.getAndUpdate { mode } == mode) return
         try {
@@ -563,7 +567,7 @@ class ConversationEventHandler(
      * Clean up resources
      */
     fun cleanup() {
-        setMode(ConversationMode.LISTENING)
+        resetMode()
         scope.cancel()
         _lastFeedbackSentForEventIdInt = null
     }
