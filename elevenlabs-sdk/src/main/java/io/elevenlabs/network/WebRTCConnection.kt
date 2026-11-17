@@ -80,6 +80,9 @@ class WebRTCConnection(
         try {
             updateConnectionState(ConnectionState.CONNECTING)
             latestConfig = config
+            // Re-arm here rather than in disconnect(), so repeated disconnect() calls for one
+            // session notify the application only once.
+            disconnectCallbackInvoked = false
 
             // Use provided shared room
             localParticipant = room.localParticipant
@@ -133,9 +136,6 @@ class WebRTCConnection(
 
             // Reset audio level to 0
             _audioLevel.value = 0.0f
-
-            // Reset disconnect callback flag to allow reconnection
-            disconnectCallbackInvoked = false
 
             // Reset to IDLE state to allow reconnection
             updateConnectionState(ConnectionState.IDLE)
