@@ -7,6 +7,7 @@ import io.livekit.android.events.DisconnectReason
 import io.livekit.android.events.EventListenable
 import io.livekit.android.events.RoomEvent
 import io.livekit.android.room.Room
+import io.livekit.android.room.participant.LocalParticipant
 import io.livekit.android.room.participant.Participant
 import io.livekit.android.room.participant.RemoteParticipant
 import io.mockk.every
@@ -183,5 +184,39 @@ class WebRTCConnectionTest {
             listOf<DisconnectionDetails>(DisconnectionDetails.User, DisconnectionDetails.User),
             disconnects.toList()
         )
+    }
+
+    @Test
+    fun `active speaker changes report whether the agent is speaking`() {
+        val connection = connect()
+        val speaking = CopyOnWriteArrayList<Boolean>()
+        connection.setOnAgentSpeakingListener { speaking.add(it) }
+        val agent = mockk<RemoteParticipant>(relaxed = true)
+        val user = mockk<LocalParticipant>(relaxed = true)
+
+        emit(RoomEvent.ActiveSpeakersChanged(room, listOf(agent)))
+        emit(RoomEvent.ActiveSpeakersChanged(room, listOf(user)))
+        emit(RoomEvent.ActiveSpeakersChanged(room, listOf(user, agent)))
+        emit(RoomEvent.ActiveSpeakersChanged(room, emptyList()))
+
+        assertEquals(listOf(true, false, true, false), speaking.toList())
+    }
+
+    @Test
+    fun `data messages do not report whether the agent is speaking`() {
+        val connection = connect()
+        val speaking = CopyOnWriteArrayList<Boolean>()
+        connection.setOnAgentSpeakingListener { speaking.add(it) }
+
+        emit(
+            mockk<RoomEvent.DataReceived> {
+                every { data } returns """{"type":"ping"}""".toByteArray()
+                every { participant } returns mockk<RemoteParticipant>(relaxed = true) {
+                    every { isSpeaking } returns true
+                }
+            }
+        )
+
+        assertEquals(emptyList<Boolean>(), speaking.toList())
     }
 }
