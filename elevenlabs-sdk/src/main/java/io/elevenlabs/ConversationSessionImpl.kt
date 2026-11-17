@@ -98,7 +98,11 @@ internal class ConversationSessionImpl(
         },
         onError = { code, message ->
             try { config.onError?.invoke(code, message) } catch (_: Throwable) {}
-        }
+        },
+        onModeChange = { mode ->
+            try { config.onModeChange?.invoke(mode) } catch (_: Throwable) {}
+        },
+        modeFollowsAgentAudio = !config.textOnly
     )
 
     // StateFlow backing fields
@@ -131,6 +135,10 @@ internal class ConversationSessionImpl(
                     val event = ConversationEventParser.parseIncomingEvent(messageJson)
                     event?.let { eventHandler.handleIncomingEvent(it) }
                 }
+            }
+
+            connection.setOnAgentSpeakingListener { isSpeaking ->
+                eventHandler.onAgentSpeakingChanged(isSpeaking)
             }
 
             // Set up connection state listener

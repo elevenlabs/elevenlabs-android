@@ -4,7 +4,6 @@ import android.content.Context
 import android.util.Log
 import io.elevenlabs.ConversationConfig
 import io.elevenlabs.models.AudioFrame
-import io.elevenlabs.models.ConversationMode
 import io.elevenlabs.models.ConversationStatus
 import io.elevenlabs.models.DisconnectionDetails
 import io.elevenlabs.models.OutgoingEvent
@@ -58,6 +57,7 @@ class WebRTCConnection(
 
     private var messageListener: ((String) -> Unit)? = null
     private var connectionStateListener: ((ConnectionState) -> Unit)? = null
+    private var agentSpeakingListener: ((Boolean) -> Unit)? = null
 
     private val messageChannel = Channel<String>(Channel.UNLIMITED)
     private var messageJob: Job? = null
@@ -190,6 +190,10 @@ class WebRTCConnection(
      */
     override fun setOnConnectionStateListener(listener: (ConnectionState) -> Unit) {
         this.connectionStateListener = listener
+    }
+
+    override fun setOnAgentSpeakingListener(listener: (Boolean) -> Unit) {
+        this.agentSpeakingListener = listener
     }
 
     private var eventHandlerJob: Job? = null
@@ -396,9 +400,7 @@ class WebRTCConnection(
                 }
                 latestConfig?.onMessage?.invoke(source, message)
 
-                // Toggle mode based on source
-                val mode = if (participant?.isSpeaking == true) ConversationMode.SPEAKING else ConversationMode.LISTENING
-                latestConfig?.onModeChange?.invoke(mode)
+                agentSpeakingListener?.invoke(participant?.isSpeaking == true)
             } catch (t: Throwable) {
                 Log.d("WebRTCConnection", "onMessage callback threw: ${t.message}")
             }
