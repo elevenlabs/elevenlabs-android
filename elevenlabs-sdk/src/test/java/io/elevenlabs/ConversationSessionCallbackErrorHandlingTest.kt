@@ -1,6 +1,7 @@
 package io.elevenlabs
 
 import io.elevenlabs.audio.AudioManager
+import io.elevenlabs.models.ConversationMode
 import io.elevenlabs.network.BaseConnection
 import io.mockk.Runs
 import io.mockk.coEvery
@@ -196,6 +197,36 @@ class ConversationSessionCallbackErrorHandlingTest {
 
             deliver("""{"type":"vad_score","vad_score_event":{"vad_score":0.7}}""")
             assertEquals(1, vadCalls)
+
+            session.endSession()
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun `throwing onModeChange is logged and does not reach the transport or stop mode tracking`() = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+        try {
+            val onAgentSpeaking = slot<(Boolean) -> Unit>()
+            every { connection.setOnAgentSpeakingListener(capture(onAgentSpeaking)) } just Runs
+            val modeChanges = mutableListOf<ConversationMode>()
+            val session = startSession(
+                ConversationConfig(
+                    agentId = "agent-id",
+                    onModeChange = { mode ->
+                        modeChanges += mode
+                        throw RuntimeException("mode boom")
+                    }
+                )
+            )
+
+            onAgentSpeaking.captured(true)
+            assertEquals(ConversationMode.SPEAKING, session.mode.value)
+
+            onAgentSpeaking.captured(false)
+            assertEquals(ConversationMode.LISTENING, session.mode.value)
+            assertEquals(listOf(ConversationMode.SPEAKING, ConversationMode.LISTENING), modeChanges)
 
             session.endSession()
         } finally {
