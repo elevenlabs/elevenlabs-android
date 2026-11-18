@@ -1,6 +1,8 @@
 package io.elevenlabs
 
+import android.util.Log
 import io.elevenlabs.audio.AudioManager
+import io.elevenlabs.models.AudioAlignment
 import io.elevenlabs.models.ConversationMode
 import io.elevenlabs.network.BaseConnection
 import io.mockk.Runs
@@ -8,7 +10,10 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
+import io.mockk.mockkStatic
 import io.mockk.slot
+import io.mockk.unmockkStatic
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -245,6 +250,41 @@ class ConversationSessionCallbackErrorHandlingTest {
 
             session.endSession()
         } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun `throwing onAudioAlignment is logged and still delivers onAudioAlignmentEvent`() = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+        mockkStatic(Log::class)
+        try {
+            every { Log.w(any(), any(), any<Throwable>()) } returns 0
+            val alignments = mutableListOf<AudioAlignment>()
+            val session = startSession(
+                ConversationConfig(
+                    agentId = "agent-id",
+                    textOnly = true,
+                    onAudioAlignment = { throw RuntimeException("alignment boom") },
+                    onAudioAlignmentEvent = { alignments += it }
+                )
+            )
+
+            deliver(
+                """{"type":"audio","audio_event":{"event_id":56,"alignment":{"chars":["H","i"],"char_start_times_ms":[0,80],"char_durations_ms":[80,80]}}}"""
+            )
+
+            verify(exactly = 1) {
+                Log.w("ConversationSession", "onAudioAlignment callback threw", match { it.message == "alignment boom" })
+            }
+            assertEquals(
+                listOf(AudioAlignment(eventId = 56, chars = listOf("H", "i"), charStartTimesMs = listOf(0, 80), charDurationsMs = listOf(80, 80))),
+                alignments
+            )
+
+            session.endSession()
+        } finally {
+            unmockkStatic(Log::class)
             Dispatchers.resetMain()
         }
     }
