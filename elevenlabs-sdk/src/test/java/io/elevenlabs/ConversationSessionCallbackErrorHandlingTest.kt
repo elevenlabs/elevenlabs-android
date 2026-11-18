@@ -75,9 +75,24 @@ class ConversationSessionCallbackErrorHandlingTest {
                 )
             )
 
-            deliver("""{"type":"vad_score","vad_score_event":{"vad_score":0.5}}""")
-            deliver("""{"type":"agent_response","agent_response_event":{"agent_response":"hi","event_id":1}}""")
-            assertEquals(1, agentResponses)
+            io.mockk.mockkStatic(android.util.Log::class)
+            try {
+                every { android.util.Log.w(any(), any(), any<Throwable>()) } returns 0
+
+                deliver("""{"type":"vad_score","vad_score_event":{"vad_score":0.5}}""")
+                io.mockk.verify(exactly = 1) {
+                    android.util.Log.w(
+                        "ConversationSession",
+                        "onVadScore callback threw",
+                        match { it is RuntimeException && it.message == "vad boom" }
+                    )
+                }
+
+                deliver("""{"type":"agent_response","agent_response_event":{"agent_response":"hi","event_id":1}}""")
+                assertEquals(1, agentResponses)
+            } finally {
+                io.mockk.unmockkStatic(android.util.Log::class)
+            }
 
             session.endSession()
         } finally {
