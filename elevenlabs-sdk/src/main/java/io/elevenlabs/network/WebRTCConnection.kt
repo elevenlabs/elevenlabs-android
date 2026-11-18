@@ -273,6 +273,10 @@ class WebRTCConnection(
                         handleDataReceived(event.data, event.participant)
                     }
 
+                    is RoomEvent.ActiveSpeakersChanged -> {
+                        agentSpeakingListener?.invoke(event.speakers.any { it is RemoteParticipant })
+                    }
+
                     else -> {
                         Log.d("WebRTCConnection", "Unhandled event: ${event.javaClass.simpleName}")
                     }
@@ -399,8 +403,6 @@ class WebRTCConnection(
                     else -> "ai"
                 }
                 latestConfig?.onMessage?.invoke(source, message)
-
-                agentSpeakingListener?.invoke(participant?.isSpeaking == true)
             } catch (t: Throwable) {
                 Log.d("WebRTCConnection", "onMessage callback threw: ${t.message}")
             }

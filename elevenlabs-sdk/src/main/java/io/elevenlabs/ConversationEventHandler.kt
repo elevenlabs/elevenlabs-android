@@ -463,13 +463,13 @@ class ConversationEventHandler(
         setMode(if (isSpeaking) ConversationMode.SPEAKING else ConversationMode.LISTENING)
     }
 
+    fun resetMode() {
+        setMode(ConversationMode.LISTENING)
+    }
+
     private fun setMode(mode: ConversationMode) {
         if (_conversationMode.getAndUpdate { mode } == mode) return
-        try {
-            onModeChange?.invoke(mode)
-        } catch (e: Exception) {
-            Log.e("ConvEventHandler", "Error in onModeChange callback: ${e.message}", e)
-        }
+        onModeChange?.invoke(mode)
     }
 
     /** Accumulates a streaming `agent_chat_response_part` into its turn's message. */
@@ -563,7 +563,7 @@ class ConversationEventHandler(
      * Clean up resources
      */
     fun cleanup() {
-        setMode(ConversationMode.LISTENING)
+        resetMode()
         scope.cancel()
         _lastFeedbackSentForEventIdInt = null
     }
