@@ -80,4 +80,14 @@ class ConversationOverridesBuilderTest {
 
         assertFalse(ConversationClientImpl.resolveTextOnly(config).textOnly)
     }
+
+    @Test
+    fun `tts speed override is sent`() {
+        val config = ConversationConfig(agentId = "agent", overrides = Overrides(tts = TtsOverrides(speed = 1.2)))
+
+        val tts = ConversationOverridesBuilder.constructOverrides(config)
+            .getJSONObject("conversation_config_override").getJSONObject("tts")
+        assertEquals(1.2, tts.getDouble("speed"), 0.0)
+        assertFalse(tts.has("voice_id"))
+    }
 }

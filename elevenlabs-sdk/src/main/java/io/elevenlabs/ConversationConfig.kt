@@ -156,7 +156,8 @@ data class PromptOverrides(
 )
 
 data class TtsOverrides(
-    val voiceId: String? = null
+    val voiceId: String? = null,
+    val speed: Double? = null
 )
 
 data class ConversationOverrides(
