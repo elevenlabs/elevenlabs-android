@@ -37,6 +37,8 @@ class ConversationEventHandler(
     private val onAgentToolResponse: ((String, String, String, Boolean) -> Unit)? = null,
     private val onConversationInitiationMetadata: ((String, String, String) -> Unit)? = null,
     private val onInterruption: ((Int) -> Unit)? = null,
+    private val onAgentResponseComplete: ((Int) -> Unit)? = null,
+    private val onGuardrailTriggered: ((String?) -> Unit)? = null,
     private val onEndCall: (suspend () -> Unit)? = null,
     private val onError: ((Int, String?) -> Unit)? = null,
     private val onModeChange: ((ConversationMode) -> Unit)? = null,
@@ -81,6 +83,10 @@ class ConversationEventHandler(
                 is ConversationEvent.ConversationInitiationMetadata -> handleConversationInitiationMetadata(event)
                 is ConversationEvent.Interruption -> handleInterruption(event)
                 is ConversationEvent.ServerError -> handleServerError(event)
+                is ConversationEvent.AgentResponseComplete ->
+                    try { onAgentResponseComplete?.invoke(event.eventId) } catch (_: Throwable) {}
+                is ConversationEvent.GuardrailTriggered ->
+                    try { onGuardrailTriggered?.invoke(event.guardrailName) } catch (_: Throwable) {}
 
             }
         } catch (e: Exception) {

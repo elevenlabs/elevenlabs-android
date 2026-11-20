@@ -298,6 +298,7 @@ Both parameters are optional and default to the standard ElevenLabs production e
 - **onMessage(source: String, message: String)**: Raw JSON messages from data channel. `source` is `"ai"` or `"user"`.
 - **onModeChange(mode: ConversationMode)**: `ConversationMode.SPEAKING` or `ConversationMode.LISTENING`; drive your speaking indicator.
 - **onStatusChange(status: ConversationStatus)**: Enum values: `CONNECTED`, `CONNECTING`, `DISCONNECTED`, `DISCONNECTING`, `ERROR`.
+- **onError(code: Int, message: String?)**: An error reported by the server (`error` and `client_error` events); when a `client_error` has no message, `message` is its error name.
 
 ### Conversation Event Callbacks
 
@@ -307,6 +308,8 @@ Both parameters are optional and default to the standard ElevenLabs production e
 - **onAgentResponsePartEvent(partType: AgentResponsePartType, text: String, eventId: Int?)**: Streaming agent text parts. `partType` is `START`, `DELTA`, or `STOP`.
 - **onAgentResponseCorrectionEvent(text: String, eventId: Int?)**: Corrected agent response (after user interruption), with its server event id.
 - **onInterruption(eventId: Int)**: User interrupted the agent while speaking.
+- **onAgentResponseComplete(eventId: Int)**: The agent finished its response, including any tool calls it was waiting for (`agent_response_complete` client event).
+- **onGuardrailTriggered(guardrailName: String?)**: A guardrail was triggered; the server ends the conversation afterwards (`guardrail_triggered` client event).
 
 > **Deprecated:** `onUserTranscript(transcript: String)`, `onAgentResponse(response: String)`, and `onAgentResponseCorrection(originalResponse: String, correctedResponse: String)` are superseded by the `…Event` callbacks above, which also surface the server event id. They still fire for backward compatibility.
 
