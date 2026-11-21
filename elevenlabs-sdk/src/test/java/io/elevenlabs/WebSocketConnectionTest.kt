@@ -237,6 +237,36 @@ class WebSocketConnectionTest {
     }
 
     @Test
+    fun `initiation payload carries branch, workflow node and procedures`() {
+        val firstFrame = AtomicReference<String>()
+        val initiationReceived = CountDownLatch(1)
+        enqueueServerWs(onMessage = { _, text ->
+            if (firstFrame.compareAndSet(null, text)) initiationReceived.countDown()
+        })
+
+        val connection = newConnection()
+        runBlocking {
+            connection.connect(
+                apiBaseUrl(),
+                ConversationConfig(
+                    agentId = "agent-xyz",
+                    branchId = "branch",
+                    startingWorkflowNodeId = "node",
+                    procedureIds = emptyList(),
+                    startProcedureIds = listOf("proc")
+                )
+            )
+        }
+
+        assertTrue("server received initiation", initiationReceived.await(3, TimeUnit.SECONDS))
+        val payload = org.json.JSONObject(firstFrame.get())
+        assertEquals("branch", payload.getString("branch_id"))
+        assertEquals("node", payload.getString("starting_workflow_node_id"))
+        assertEquals(0, payload.getJSONArray("procedure_ids").length())
+        assertEquals("proc", payload.getJSONArray("start_procedure_ids").getString(0))
+    }
+
+    @Test
     fun `incoming messages are forwarded to message listener`() {
         val ready = CountDownLatch(1)
         val serverSocket = AtomicReference<WebSocket>()

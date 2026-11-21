@@ -55,6 +55,10 @@ data class AudioPipelineConfiguration(
  * @param apiEndpoint Base URL for ElevenLabs API (default: "https://api.elevenlabs.io")
  * @param websocketUrl WebSocket URL for LiveKit WebRTC connection (default: "wss://livekit.rtc.elevenlabs.io")
  * @param environment Optional environment name for the agent (defaults to "production" on the server)
+ * @param branchId Optional ID of the agent branch to use for this conversation
+ * @param startingWorkflowNodeId Optional workflow node ID to start at instead of the default entry
+ * @param procedureIds Optional procedure IDs to make available to the starting agent. An empty list disables all of its procedures.
+ * @param startProcedureIds Optional free-form procedure IDs to start when the conversation starts (at most five)
  * @param audioConfiguration Optional microphone pipeline settings (software mute, muted-speech callbacks)
  */
 data class ConversationConfig(
@@ -70,6 +74,10 @@ data class ConversationConfig(
     val overrides: Overrides? = null,
     val customLlmExtraBody: Map<String, Any>? = null,
     val dynamicVariables: Map<String, Any>? = null,
+    val branchId: String? = null,
+    val startingWorkflowNodeId: String? = null,
+    val procedureIds: List<String>? = null,
+    val startProcedureIds: List<String>? = null,
     val clientTools: Map<String, ClientTool> = emptyMap(),
     val onConnect: ((conversationId: String) -> Unit)? = null,
     val onMessage: ((source: String, message: String) -> Unit)? = null,
@@ -142,26 +150,112 @@ data class Overrides(
     val agent: AgentOverrides? = null,
     val tts: TtsOverrides? = null,
     val conversation: ConversationOverrides? = null,
-    val client: ClientOverrides? = null
+    val client: ClientOverrides? = null,
+    val asr: AsrOverrides? = null,
+    val turn: TurnOverrides? = null
 )
 
 data class AgentOverrides(
     val prompt: PromptOverrides? = null,
     val firstMessage: String? = null,
-    val language: Language? = null
+    val language: Language? = null,
+    val maxConversationDurationMessage: String? = null
 )
 
+/**
+ * @param llm LLM to query, e.g. "gemini-2.0-flash-001". Any id is forwarded; the API decides which it accepts.
+ * @param reasoningEffort Reasoning effort, one of "none", "minimal", "low", "medium", "high", "xhigh" or "max". Only some models support it.
+ * @param toolIds IDs of the tools the agent can use
+ * @param toolIdsStrict When true, [toolIds] is the full list of tools allowed in the conversation, including tools on workflow nodes
+ * @param nativeMcpServerIds IDs of the native MCP servers the agent can use
+ * @param knowledgeBase Knowledge bases the agent can use
+ */
 data class PromptOverrides(
-    val prompt: String? = null
+    val prompt: String? = null,
+    val llm: String? = null,
+    val reasoningEffort: String? = null,
+    val toolIds: List<String>? = null,
+    val toolIdsStrict: Boolean? = null,
+    val nativeMcpServerIds: List<String>? = null,
+    val knowledgeBase: List<KnowledgeBaseLocator>? = null
 )
 
+/**
+ * @param type One of "file", "url", "text" or "folder"
+ * @param usageMode "prompt" or "auto"; the server defaults to "auto"
+ */
+data class KnowledgeBaseLocator(
+    val type: String,
+    val name: String,
+    val id: String,
+    val usageMode: String? = null
+)
+
+/**
+ * @param modelId TTS model, e.g. "eleven_flash_v2_5". Any id is forwarded; the API decides which it accepts.
+ */
 data class TtsOverrides(
     val voiceId: String? = null,
-    val speed: Double? = null
+    val speed: Double? = null,
+    val modelId: String? = null,
+    val stability: Double? = null,
+    val similarityBoost: Double? = null,
+    val cloneStrength: Double? = null,
+    val pronunciationDictionaryLocators: List<PronunciationDictionaryLocator>? = null,
+    val supportedVoices: List<SupportedVoice>? = null
+)
+
+data class PronunciationDictionaryLocator(
+    val pronunciationDictionaryId: String,
+    val versionId: String
+)
+
+/**
+ * An additional voice the agent can switch to.
+ *
+ * @param modelFamily One of "turbo", "flash", "multilingual", "v3_conversational", "v4" or "v4_turbo"
+ * @param optimizeStreamingLatency 0 to 4
+ */
+data class SupportedVoice(
+    val label: String,
+    val voiceId: String,
+    val description: String? = null,
+    val language: String? = null,
+    val modelFamily: String? = null,
+    val optimizeStreamingLatency: Int? = null,
+    val stability: Double? = null,
+    val speed: Double? = null,
+    val similarityBoost: Double? = null,
+    val cloneStrength: Double? = null
 )
 
 data class ConversationOverrides(
-    val textOnly: Boolean? = null
+    val textOnly: Boolean? = null,
+    val maxDurationSeconds: Int? = null
+)
+
+/**
+ * @param keywords Keywords to boost transcription probability for. An empty list is sent as is.
+ */
+data class AsrOverrides(
+    val keywords: List<String>? = null
+)
+
+/**
+ * @param noisyEnvironmentMessage What the agent says when it detects a noisy environment
+ */
+data class TurnOverrides(
+    val softTimeoutConfig: SoftTimeoutConfigOverrides? = null,
+    val noisyEnvironmentMessage: String? = null
+)
+
+/**
+ * @param message What the agent says at the first soft timeout while waiting for the LLM
+ * @param additionalSoftTimeoutMessages Filler messages for later soft timeouts in the same generation
+ */
+data class SoftTimeoutConfigOverrides(
+    val message: String? = null,
+    val additionalSoftTimeoutMessages: List<String>? = null
 )
 
 data class ClientOverrides(
