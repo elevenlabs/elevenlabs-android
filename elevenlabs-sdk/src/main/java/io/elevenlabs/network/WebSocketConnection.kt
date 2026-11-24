@@ -222,9 +222,12 @@ class WebSocketConnection(
             // [DisconnectionDetails.Agent]. Anything else (going away, abnormal, server
             // unreachable, etc.) is reported as an error.
             val details = if (code == NORMAL_CLOSURE) {
-                DisconnectionDetails.Agent
+                DisconnectionDetails.Agent(closeCode = code)
             } else {
-                DisconnectionDetails.Error(RuntimeException("WebSocket closed: $code $reason"))
+                DisconnectionDetails.Error(
+                    RuntimeException("WebSocket closed: $code $reason"),
+                    closeCode = code
+                )
             }
             updateConnectionState(ConnectionState.DISCONNECTED)
             invokeOnDisconnect(details)

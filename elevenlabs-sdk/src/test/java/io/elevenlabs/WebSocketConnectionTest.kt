@@ -327,10 +327,7 @@ class WebSocketConnectionTest {
         serverSocket.get().close(1000, "bye")
 
         assertTrue("onDisconnect fired", disconnected.await(3, TimeUnit.SECONDS))
-        assertTrue(
-            "expected Agent, got ${capturedDetails.get()}",
-            capturedDetails.get() is DisconnectionDetails.Agent
-        )
+        assertEquals(DisconnectionDetails.Agent(closeCode = 1000), capturedDetails.get())
         assertEquals(ConnectionState.DISCONNECTED, capturedState.get())
     }
 
@@ -390,6 +387,7 @@ class WebSocketConnectionTest {
             "expected Error, got ${captured.get()}",
             captured.get() is DisconnectionDetails.Error
         )
+        assertEquals(1011, captured.get().closeCode)
     }
 
     /**

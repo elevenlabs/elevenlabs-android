@@ -293,8 +293,10 @@ Both parameters are optional and default to the standard ElevenLabs production e
 - **onConnect(conversationId: String)**: Fired once connected. Conversation ID can also be read via `session.getId()`.
 - **onDisconnect(reason: DisconnectionDetails)**: Called once when the conversation ends, however many times `endSession()` is called. The reason can be:
   - `DisconnectionDetails.User` - Your code ended the conversation by calling `endSession()`/`disconnect()`. Never fired for a connection that timed out or was closed by the remote side on its own.
-  - `DisconnectionDetails.Agent` - The remote side ended the conversation without a local `endSession()`/`disconnect()` call: the agent called the `end_call` tool, the agent left the room, or the server closed the room or socket normally. For text-only (WebSocket) sessions this also covers a server-enforced idle/inactivity timeout, since the SDK can't distinguish that from the agent gracefully ending the call - both close the socket normally.
-  - `DisconnectionDetails.Error(exception: Exception)` - Connection error occurred, including a voice (LiveKit) room that disconnected for any reason other than being closed on purpose
+  - `DisconnectionDetails.Agent(closeCode: Int?)` - The remote side ended the conversation without a local `endSession()`/`disconnect()` call: the agent called the `end_call` tool, the agent left the room, or the server closed the room or socket normally. For text-only (WebSocket) sessions this also covers a server-enforced idle/inactivity timeout, since the SDK can't distinguish that from the agent gracefully ending the call - both close the socket normally.
+  - `DisconnectionDetails.Error(exception: Exception, closeCode: Int?)` - Connection error occurred, including a voice (LiveKit) room that disconnected for any reason other than being closed on purpose
+
+  When the server closed a text-only (WebSocket) session's connection, `reason.closeCode` is the close code it sent (`1000` for a normal closure, which is reported as `Agent`). It is `null` otherwise, including for every voice session. `Agent` is a class: match it with `is DisconnectionDetails.Agent`.
 - **onMessage(source: String, message: String)**: Raw JSON messages from data channel. `source` is `"ai"` or `"user"`.
 - **onModeChange(mode: ConversationMode)**: `ConversationMode.SPEAKING` or `ConversationMode.LISTENING`; drive your speaking indicator.
 - **onStatusChange(status: ConversationStatus)**: Enum values: `CONNECTED`, `CONNECTING`, `DISCONNECTED`, `DISCONNECTING`, `ERROR`.

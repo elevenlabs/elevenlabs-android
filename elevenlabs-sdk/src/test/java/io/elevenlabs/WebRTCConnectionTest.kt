@@ -83,7 +83,7 @@ class WebRTCConnectionTest {
         emit(roomDisconnected(DisconnectReason.ROOM_DELETED))
         connection.disconnect()
 
-        assertEquals(listOf<DisconnectionDetails>(DisconnectionDetails.Agent), disconnects.toList())
+        assertEquals(listOf<DisconnectionDetails>(DisconnectionDetails.Agent()), disconnects.toList())
     }
 
     @Test
@@ -107,7 +107,7 @@ class WebRTCConnectionTest {
         emit(agentLeft())
         emit(roomDisconnected(DisconnectReason.ROOM_DELETED))
 
-        assertEquals(listOf<DisconnectionDetails>(DisconnectionDetails.Agent), disconnects.toList())
+        assertEquals(listOf<DisconnectionDetails>(DisconnectionDetails.Agent()), disconnects.toList())
     }
 
     @Test
@@ -149,7 +149,7 @@ class WebRTCConnectionTest {
         emit(agentLeft())
         emit(roomDisconnected(DisconnectReason.ROOM_DELETED))
 
-        assertEquals(listOf<DisconnectionDetails>(DisconnectionDetails.Agent), disconnects.toList())
+        assertEquals(listOf<DisconnectionDetails>(DisconnectionDetails.Agent()), disconnects.toList())
     }
 
     @Test
