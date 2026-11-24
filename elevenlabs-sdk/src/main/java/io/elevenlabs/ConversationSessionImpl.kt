@@ -97,7 +97,7 @@ internal class ConversationSessionImpl(
             try { config.onInterruption?.invoke(eventId) } catch (_: Throwable) {}
         },
         onEndCall = {
-            endSession(DisconnectionDetails.Agent)
+            endSession(DisconnectionDetails.Agent())
         },
         onError = { code, message ->
             try { config.onError?.invoke(code, message) } catch (_: Throwable) {}

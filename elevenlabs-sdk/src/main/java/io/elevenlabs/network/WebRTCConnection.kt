@@ -306,7 +306,7 @@ class WebRTCConnection(
         // LiveKit also drops every remote participant when the room itself goes down, so the
         // agent leaving only means the agent ended the conversation while the room stays up.
         when (room.state) {
-            Room.State.CONNECTED -> disconnect(DisconnectionDetails.Agent)
+            Room.State.CONNECTED -> disconnect(DisconnectionDetails.Agent())
             // The room is closing: the RoomEvent.Disconnected that follows carries the reason.
             Room.State.DISCONNECTED -> Unit
             // A full reconnect drops the participants: the connection failed.
@@ -323,7 +323,7 @@ class WebRTCConnection(
      */
     private fun disconnectionDetailsFor(event: RoomEvent.Disconnected): DisconnectionDetails =
         if (event.reason in DELIBERATE_DISCONNECT_REASONS) {
-            DisconnectionDetails.Agent
+            DisconnectionDetails.Agent()
         } else {
             DisconnectionDetails.Error(
                 event.error ?: RuntimeException("LiveKit room disconnected: ${event.reason}")

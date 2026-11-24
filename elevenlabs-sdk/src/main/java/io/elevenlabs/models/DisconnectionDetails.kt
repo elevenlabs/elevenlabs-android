@@ -11,9 +11,14 @@ package io.elevenlabs.models
 sealed class DisconnectionDetails {
     /**
      * Disconnection due to an error
-     * @param message Description of the error that occurred
+     * @param exception Description of the error that occurred
+     * @param closeCode The close code the server sent, when the server closing the
+     * WebSocket connection with a code other than a normal closure caused the error
      */
-    data class Error(val exception: Exception) : DisconnectionDetails()
+    data class Error(
+        val exception: Exception,
+        override val closeCode: Int? = null
+    ) : DisconnectionDetails()
 
     /**
      * Disconnection initiated by the remote side rather than by a local call to
@@ -23,8 +28,12 @@ sealed class DisconnectionDetails {
      * *why* the remote side closed the connection, e.g. the agent gracefully ending the
      * conversation vs. the server enforcing an idle/inactivity timeout - both close the
      * socket normally without the client having asked for it, so both surface as [Agent].
+     *
+     * @param closeCode The close code the server sent when it closed the WebSocket
+     * connection, or `null` when the session didn't end with the server closing it (the
+     * agent's `end_call` tool, or a voice session)
      */
-    data object Agent : DisconnectionDetails()
+    data class Agent(override val closeCode: Int? = null) : DisconnectionDetails()
 
     /**
      * Disconnection initiated by the user, i.e. as a direct result of a local call to
@@ -42,5 +51,12 @@ sealed class DisconnectionDetails {
             is Agent -> "agent"
             is User -> "user"
         }
-}
 
+    /**
+     * The close code the server sent when it closed the session's WebSocket connection,
+     * e.g. `1000` for a normal closure. `null` when the session didn't end with the server
+     * closing the WebSocket connection, including every voice (WebRTC) session.
+     */
+    open val closeCode: Int?
+        get() = null
+}

@@ -57,7 +57,7 @@ class ConversationSessionDisconnectTest {
             """{"type":"agent_tool_response","agent_tool_response":{"tool_name":"end_call","tool_call_id":"call-1","tool_type":"system","is_error":false}}"""
         )
 
-        verify(exactly = 1) { connection.disconnect(DisconnectionDetails.Agent) }
+        verify(exactly = 1) { connection.disconnect(DisconnectionDetails.Agent()) }
         verify(exactly = 0) { connection.disconnect(DisconnectionDetails.User) }
     }
 
@@ -68,6 +68,6 @@ class ConversationSessionDisconnectTest {
         session.endSession()
 
         verify(exactly = 1) { connection.disconnect(DisconnectionDetails.User) }
-        verify(exactly = 0) { connection.disconnect(DisconnectionDetails.Agent) }
+        verify(exactly = 0) { connection.disconnect(DisconnectionDetails.Agent()) }
     }
 }
